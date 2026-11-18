@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Consulte cotações e simule conversões de dólar, euro e bitcoin para real com o CâmbioTrack.">
+  <title>Carteira · CâmbioTrack Pro</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+  <header class="navbar">
+    <div>
+      <h1 class="brand"><span class="brand-mark" aria-hidden="true">⇄</span> CâmbioTrack <span class="brand-pro">Pro</span></h1>
+      <p>Carteira de simulações</p>
+    </div>
+    <div class="conta"><span id="usuario"></span><button id="sair" class="btn-secondary" type="button">Sair</button></div>
+  </header>
+
+  <p id="status-painel" class="container" role="status">Verificando acesso à carteira…</p>
+  <main id="conteudo" class="container" hidden>
+    <section id="secao-cotacoes" class="quotes-section" aria-labelledby="titulo-cotacoes" aria-busy="true">
+      <div class="section-header">
+        <h2 id="titulo-cotacoes">Cotações de referência</h2>
+        <button type="button" class="btn-secondary" id="atualizar-cotacoes" disabled>
+          <span id="rotulo-atualizar">Carregando...</span>
+        </button>
+      </div>
+
+      <p id="status-api" class="mensagem-api" role="status" aria-live="polite">
+        Carregando cotações...
+      </p>
+
+      <div class="card-grid">
+        <article class="card" aria-labelledby="titulo-usd">
+          <div class="card-header">
+            <h3 id="titulo-usd">Dólar americano</h3>
+            <span class="variacao" id="variacao-USD">—</span>
+          </div>
+          <p class="subtitle">USD / BRL</p>
+          <p class="quote-label">Para vender</p>
+          <p class="cotacao-valor" id="cotacao-USD">—</p>
+          <p class="cotacao-ask">Para comprar <strong id="ask-USD">—</strong></p>
+          <p class="cotacao-data" id="data-USD">Aguardando cotação</p>
+        </article>
+
+        <article class="card" aria-labelledby="titulo-eur">
+          <div class="card-header">
+            <h3 id="titulo-eur">Euro</h3>
+            <span class="variacao" id="variacao-EUR">—</span>
+          </div>
+          <p class="subtitle">EUR / BRL</p>
+          <p class="quote-label">Para vender</p>
+          <p class="cotacao-valor" id="cotacao-EUR">—</p>
+          <p class="cotacao-ask">Para comprar <strong id="ask-EUR">—</strong></p>
+          <p class="cotacao-data" id="data-EUR">Aguardando cotação</p>
+        </article>
+
+        <article class="card" aria-labelledby="titulo-btc">
+          <div class="card-header">
+            <h3 id="titulo-btc">Bitcoin</h3>
+            <span class="variacao" id="variacao-BTC">—</span>
+          </div>
+          <p class="subtitle">BTC / BRL</p>
+          <p class="quote-label">Para vender</p>
+          <p class="cotacao-valor" id="cotacao-BTC">—</p>
+          <p class="cotacao-ask">Para comprar <strong id="ask-BTC">—</strong></p>
+          <p class="cotacao-data" id="data-BTC">Aguardando cotação</p>
+        </article>
+      </div>
+
+      <p class="nota">
+        Fonte: AwesomeAPI · Reais por unidade · Horário de Brasília
+      </p>
+    </section>
+    <div class="conversion-grid">
+      <section class="form-section" aria-labelledby="titulo-conversor">
+        <h2 id="titulo-conversor">Simular operação</h2>
+        <p class="subtitle">Escolha o sentido da operação e o ativo.</p>
+
+        <form id="formulario-conversao">
+          <fieldset id="campos-conversao" disabled>
+            <legend class="sr-only">Dados da conversão</legend>
+
+            <div class="form-row">
+              <div class="input-group">
+                <label for="tipo">Operação</label>
+                <select id="tipo" name="tipo">
+                  <option value="VENDA">Venda</option>
+                  <option value="COMPRA">Compra</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="moeda-origem">Ativo</label>
+                <select id="moeda-origem" name="moedaOrigem" required>
+                  <option value="USD">USD · Dólar</option>
+                  <option value="EUR">EUR · Euro</option>
+                  <option value="BTC">BTC · Bitcoin</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="montante">
+                Valor a converter (<span id="unidade-montante">USD</span>)
+              </label>
+              <input
+                id="montante"
+                name="montante"
+                type="text"
+                inputmode="decimal"
+                maxlength="26"
+                placeholder="Ex.: 100,00"
+                required
+                aria-describedby="ajuda-montante erro-formulario"
+              >
+              <p class="ajuda" id="ajuda-montante">
+                Informe um valor maior que zero, com até 2 casas decimais.
+              </p>
+            </div>
+
+            <p class="erro-formulario" id="erro-formulario" role="alert" hidden></p>
+            <button class="btn-primary" type="submit" id="registrar-operacao">
+              Registrar simulação
+            </button>
+          </fieldset>
+        </form>
+
+        <p class="nota">Simulação educativa. Nenhuma compra ou transferência é realizada.</p>
+      </section>
+      <section class="result-section" aria-labelledby="titulo-resultado" aria-live="polite" aria-atomic="true">
+        <h2 id="titulo-resultado">Resultado estimado</h2>
+        <p id="resumo-origem" class="subtitle">Informe um valor no conversor</p>
+
+        <p class="result-label">Você recebe</p>
+        <output id="resultado-liquido" for="montante tipo moeda-origem">—</output>
+
+        <dl class="result-details">
+          <div>
+            <dt>Cotação utilizada</dt>
+            <dd id="resultado-cotacao">—</dd>
+          </div>
+          <div>
+            <dt>Valor bruto</dt>
+            <dd id="resultado-bruto">—</dd>
+          </div>
+          <div>
+            <dt>Spread simulado (1%)</dt>
+            <dd id="resultado-taxa">—</dd>
+          </div>
+        </dl>
+
+        <p id="aviso-resultado" class="nota">
+          A estimativa aparece aqui antes de você registrar a operação.
+        </p>
+      </section>
+    </div>
+    <section class="metrics-section" aria-labelledby="titulo-indicadores">
+      <div class="section-header">
+        <h2 id="titulo-indicadores">Indicadores da carteira</h2>
+        <button class="btn-secondary" id="atualizar-carteira" type="button">Atualizar carteira</button>
+      </div>
+
+      <dl class="metrics-panel" aria-live="polite" aria-atomic="true">
+        <div class="stat-card">
+          <dt>Operações registradas</dt>
+          <dd id="total-operacoes">—</dd>
+        </div>
+        <div class="stat-card">
+          <dt>Operações ativas</dt>
+          <dd id="operacoes-ativas">—</dd>
+        </div>
+        <div class="stat-card">
+          <dt>Total movimentado <span>· ativas, antes do spread</span></dt>
+          <dd id="total-movimentado">—</dd>
+        </div>
+      </dl>
+    </section>
+    <section class="list-section" aria-labelledby="titulo-historico">
+      <h2 id="titulo-historico">Histórico de operações</h2>
+      <p id="mensagem-operacao" class="mensagem-operacao" role="status" aria-live="polite"></p>
+
+      <div id="historico-vazio" class="empty-state" hidden>
+        <h3>Nenhuma operação registrada</h3>
+        <p>Registre uma simulação para acompanhar os valores e gerenciar suas operações.</p>
+      </div>
+
+      <div id="lista-operacoes" class="card-list"></div>
+
+      <p class="nota">
+        O histórico mantém a cotação utilizada no registro de cada operação.
+      </p>
+    </section>
+
+  </main>
+    <noscript>
+      <p class="erro-formulario">
+        Ative o JavaScript no navegador para consultar cotações e simular conversões.
+      </p>
+    </noscript>
+
+  <footer class="footer">
+    <p>CâmbioTrack Pro · Projeto 02 — Desenvolvimento Web</p>
+  </footer>
+  <script type="module" src="js/script.js"></script>
+</body>
+</html>
