@@ -8,20 +8,24 @@ Simule uma venda de dólar, euro ou bitcoin para receber reais, ou uma compra de
 
 O painel evolui o CâmbioTrack do Projeto 01. Mantém os três pares com BRL, a atualização manual de cotações, a prévia, o spread de 1%, os indicadores e os cartões de histórico. O Projeto 02 acrescenta contas individuais, operações de compra, exclusão de registros e persistência em SQLite.
 
-## Executar em dois terminais
+## Executar no Windows com VS Code e PowerShell
 
-Use **Node.js 24 LTS**, a partir da versão **24.15.0** (validado com 24.22.1), npm, um navegador moderno e acesso HTTPS à AwesomeAPI para obter preços. O SQLite já acompanha essa versão do Node. Abra os dois terminais na pasta que contém este README.
+Extraia o ZIP e abra a pasta **CambioTrack-Pro** que contém este README. Recomenda-se o Node.js 24 LTS atualizado com o npm. Também pode usar a linha 22 LTS a partir de 22.21.0. Na linha 24, o mínimo é 24.5.0. Essas versões incluem o SQLite integrado, a leitura de `.env` e o suporte a proxy usado pelo servidor. Abra dois terminais PowerShell nessa pasta. Os exemplos usam `npm.cmd`, o lançador do npm para Windows. No PowerShell de Linux ou macOS, use `npm` nas mesmas linhas.
 
-**Terminal 1 — API Express**
+**Terminal 1 — instalar e iniciar a API**
 
-```sh
+```powershell
+node --version
+npm.cmd --version
 cd backend
-npm ci
-node -e "const fs=require('node:fs'); const chave=require('node:crypto').randomBytes(48).toString('hex'); fs.writeFileSync('.env','JWT_SECRET='+chave+'\n',{flag:'wx',mode:0o600})"
-npm start
+npm.cmd ci
+if (-not (Test-Path -LiteralPath .env)) {
+    node -e "const fs=require('node:fs'); const key=require('node:crypto').randomBytes(48).toString('hex'); fs.writeFileSync('.env','JWT_SECRET='+key+'\n',{flag:'wx',mode:0o600})"
+}
+npm.cmd start
 ```
 
-Execute o comando de geração da chave uma vez por instalação. Ele cria `backend/.env` com uma chave aleatória privada. Se o arquivo já existir, confira sua configuração antes de iniciar. Para configurar manualmente, use `backend/.env.example` como modelo e defina `JWT_SECRET` com pelo menos 32 bytes. Para recarregar o servidor durante edições, use `npm run dev`.
+O comando cria a chave JWT no arquivo privado `backend/.env` na primeira execução e preserva uma configuração existente. Se usar `backend/.env.example` como modelo, preencha `JWT_SECRET` com uma chave aleatória de pelo menos 32 bytes. Guarde o arquivo na pasta da sua conta. Para reiniciar em modo de desenvolvimento, use `npm.cmd run dev`.
 
 | Variável do back-end | Uso |
 | --- | --- |
@@ -32,13 +36,13 @@ Execute o comando de geração da chave uma vez por instalação. Ele cria `back
 
 **Terminal 2 — interface HTML, CSS e JavaScript**
 
-```sh
+```powershell
 cd frontend
-npm ci
-npm start
+npm.cmd ci
+npm.cmd start
 ```
 
-Abra **http://localhost:5173**. O servidor do front-end entrega os arquivos estáticos. No fluxo de desenvolvimento, o navegador envia requisições para a API em **http://localhost:3000/api**. Mantenha a porta padrão do back-end ao usar esse fluxo. O Node executa o servidor de arquivos, e o JavaScript do painel roda no navegador.
+Abra **http://localhost:5173** para criar a primeira conta. Use os dois processos em execução. A interface em 5173 chama a API em **http://localhost:3000/api**, no mesmo nome de host. Se trocar a porta da API em `PORT`, abra a interface servida diretamente pelo Express nessa porta. O SQLite já acompanha o Node. Preços de mercado exigem acesso HTTPS a `economia.awesomeapi.com.br` pelo computador que executa a API.
 
 ## Usar a carteira
 
@@ -106,27 +110,34 @@ Todos os caminhos abaixo começam em `/api`. Envie JSON com `Content-Type: appli
 | `PATCH /transacoes/:id/cancelar` | Sim | Cancela e preserva no histórico | 200, registro atualizado |
 | `DELETE /transacoes/:id` | Sim | Remove do histórico | 204, corpo vazio |
 
-Exemplos para um terminal com `curl`. Substitua o e-mail e a senha pelos de uma conta cadastrada localmente. Para as últimas duas chamadas, defina `TOKEN` no terminal com o token devolvido pelo login.
+**Consultar a API pelo PowerShell.** Em um terceiro terminal, use o e-mail e a senha de uma conta criada pela interface. O login guarda o token na memória do terminal. A consulta de perfil e o resumo funcionam inclusive quando a fonte de preços estiver indisponível.
 
-```sh
-curl http://localhost:3000/api/cotacoes
-curl -X POST http://localhost:3000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"estudante@example.org","senha":"SENHA_DA_CONTA"}'
-curl -X POST http://localhost:3000/api/transacoes/previa \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"tipo":"VENDA","ativo":"BTC","montante":"0.00123456"}'
-curl http://localhost:3000/api/transacoes/resumo -H "Authorization: Bearer $TOKEN"
+```powershell
+$api = 'http://localhost:3000/api'
+$conta = Get-Credential -Message 'Informe o e-mail e a senha da conta local'
+$login = @{ email = $conta.UserName; senha = $conta.GetNetworkCredential().Password } | ConvertTo-Json
+$sessao = Invoke-RestMethod -Method Post -Uri "$api/auth/login" -ContentType 'application/json; charset=utf-8' -Body $login
+$headers = @{ Authorization = "Bearer $($sessao.token)" }
+Invoke-RestMethod -Uri "$api/auth/me" -Headers $headers
+Invoke-RestMethod -Uri "$api/transacoes/resumo" -Headers $headers
+```
+
+**Consultar preços e simular uma venda.** No mesmo terminal, a última chamada pede uma prévia e conserva o histórico.
+
+```powershell
+Invoke-RestMethod -Uri "$api/cotacoes"
+$venda = @{ tipo = 'VENDA'; ativo = 'BTC'; montante = '0.00123456' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "$api/transacoes/previa" -Headers $headers -ContentType 'application/json' -Body $venda
 ```
 
 Falhas têm mensagem no campo `erro`. Exemplos incluem dados inválidos (400), login ou sessão inválida (401), origem recusada (403), recurso ausente ou de outra conta (404), e-mail duplicado (409), excesso de tentativas de login (429), falha interna (500), fonte externa inválida ou indisponível (502) e tempo de espera esgotado (504).
 
 ## Testar e conferir a entrega
 
-Na pasta `backend`, após `npm ci`, execute a suíte com o comando abaixo.
+No PowerShell, abra a pasta `backend` e execute a suíte após a instalação das dependências.
 
-```sh
-npm test
+```powershell
+npm.cmd test
 ```
 
 Os testes automatizados podem usar respostas externas controladas e bancos descartáveis. Para verificar a fonte real, inicie a API e use a chamada `GET /api/cotacoes` acima. A rede precisa permitir HTTPS para `economia.awesomeapi.com.br`. Se a fonte falhar, a interface informa o problema, o servidor recusa novas operações e o histórico salvo continua acessível.

@@ -127,6 +127,8 @@ test('cadastro, hash bcrypt, e-mail único e token com expiração', async t => 
 test('validação do cadastro e integridade do SQLite', async t => {
   const api = await ambiente(t);
   const dados = dadosConta();
+  await api.req('POST', '/auth/register', 400, {});
+  await api.req('POST', '/auth/login', 400, {});
   for (const mudanca of [{ nome: ' ' }, { email: 'incompleto' }, { senha: '123' }, { senha: 'é'.repeat(37) }]) {
     await api.req('POST', '/auth/register', 400, { ...dados, ...mudanca });
   }
@@ -180,6 +182,11 @@ test('preflight permite o cliente configurado e erros do protocolo usam JSON', a
   });
   assert.equal(incompleto.status, 400);
   assert.deepEqual(Object.keys(await incompleto.json()), ['erro']);
+  const charset = await fetch(api.base + '/auth/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json; charset=iso-8859-1' }, body: '{}'
+  });
+  assert.equal(charset.status, 415);
+  assert.deepEqual(Object.keys(await charset.json()), ['erro']);
 });
 
 test('limite de dez tentativas de login falhas', async t => {
@@ -283,4 +290,18 @@ test('servidor e conexão SQLite reabertos leem a operação em uma nova sessão
   const novaSessao = await api.req('POST', '/auth/login', 200, dados);
   const historico = await api.req('GET', '/transacoes', 200, undefined, novaSessao.token);
   assert.deepEqual(historico, [salva]);
+});
+
+test('SQLite impede registros órfãos e falhas de escrita preservam a carteira', async t => {
+  const api = await ambiente(t);
+  const { token, usuario } = await cadastrarEEntrar(api);
+  const salva = await api.req('POST', '/transacoes', 201, compra, token);
+  const excluirDono = api.db.prepare('DELETE FROM usuarios WHERE id = ?');
+  assert.throws(() => excluirDono.run(usuario.id), { errcode: 787 }); // SQLITE_CONSTRAINT_FOREIGNKEY
+
+  // Altera somente a conexão temporária deste teste. Leituras seguem disponíveis.
+  api.db.exec('PRAGMA query_only = ON');
+  const falha = await api.req('POST', '/transacoes', 500, venda, token);
+  assert.deepEqual(falha, { erro: 'Falha interna ao processar a solicitação.' });
+  assert.deepEqual(await api.req('GET', '/transacoes', 200, undefined, token), [salva]);
 });

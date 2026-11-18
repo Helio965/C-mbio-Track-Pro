@@ -55,6 +55,9 @@ function createApp({ db, jwtSecret, buscarCotacoes = consultarAwesome,
     if (res.headersSent) return next(erro);
     if (erro.type === 'entity.parse.failed') return res.status(400).json({ erro: 'JSON inválido.' });
     if (erro.type === 'entity.too.large') return res.status(413).json({ erro: 'Corpo da requisição muito grande.' });
+    if (erro.type === 'charset.unsupported' || erro.type === 'encoding.unsupported') {
+      return res.status(415).json({ erro: 'Codificação do corpo da requisição não suportada.' });
+    }
     if ([400, 502, 503, 504].includes(erro.status) && !erro.type) {
       return res.status(erro.status).json({ erro: erro.message });
     }

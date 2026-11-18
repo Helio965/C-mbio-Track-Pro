@@ -1,48 +1,53 @@
-# Auditoria do Projeto 02
+# Auditoria final do Projeto 02
 
-Verificação de 18/11/2026 para a Opção B do edital de Desenvolvimento Web do CEUB. As pontuações abaixo são os pesos do professor.
+**18/11/2026 · CEUB · Desenvolvimento Web · Opção B, Câmbio Track Pro.** A revisão partiu da `main` em `43080ac`. O edital consultado tem quatro páginas. A seção 5 exige cliente responsivo, Express, persistência e autenticação. Os pesos abaixo vêm da seção 6. O prazo do portal é 30/11/2026 às 23h59.
 
-| Critério do edital | Peso | Onde conferir | Teste e resultado |
-|---|---:|---|---|
-| Back-end e API em Node/Express, respostas JSON e tratamento de erros | 2,5 | `backend/server.js` e `backend/routes/transacoes.js`, funções `createApp` e `rotasTransacoes` | Requisições HTTP cobriram criação (201), leitura, prévia sem gravação, cancelamento e exclusão (204). Identificador inválido, rota inexistente e JSON inválido produziram erros. |
-| Modelagem, leitura e escrita no banco | 2,0 | `backend/database.js`, função `abrirBanco`, tabelas `usuarios` e `transacoes` | O teste consultou a linha no arquivo SQLite, fechou servidor e banco e autenticou novamente depois da reabertura. O registro recuperado coincidiu com o original. A definição e a ativação da FK foram conferidas e o total bruto excluiu operações canceladas. |
-| Front-end integrado e responsivo | 2,0 | `frontend/login.html`, `index.html`, `css/style.css`, `js/login.js` e `js/script.js` | O roteiro em Chromium abaixo verifica formulários, valores e histórico em diferentes tamanhos de tela. |
-| Autenticação JWT e Bcrypt | 1,5 | `backend/middleware/auth.js` e `backend/routes/auth.js`, rotas de cadastro, login e perfil | Conferidos hash Bcrypt e e-mail único no banco, login incorreto, expiração, assinatura, ausência de token e limite de tentativas. A segunda conta recebeu uma carteira vazia e 404 ao tentar alterar um registro da primeira. |
-| Integração Fetch e estados da interface | 1,0 | `frontend/js/api.js`, `atualizarCarteira` e `buscarCotacoes` em `frontend/js/script.js`, `backend/services/cotacoes.js` | Preflight CORS para o cliente local, origem recusada, resposta válida controlada e respostas externas com erro. A consulta de mercado ao vivo ficou pendente nesta nuvem, conforme o teste abaixo. |
-| Documentação, comentários e ZIP | 1,0 | README, guia técnico, três arquivos `.gitignore` e pacote de entrega | Roteiro para iniciar dois servidores e cadastrar a primeira conta. O pacote usa uma pasta raiz e inclui os dois lockfiles e o modelo público de configuração. |
+## Evidência anterior e reprodução atual
 
-## API, cálculos e falhas
+O relatório do commit inicial registrava 19 testes aprovados e uma rodada em Chromium. Nesta revisão, executamos novamente a suíte daquele código e reproduzimos **19/19** antes dos ajustes. A suíte final passou em **21/21**, sem falhas ou testes ignorados. São 10 testes HTTP/SQLite e 11 de finanças e integração com o provedor. O roteiro de navegador abaixo foi executado separadamente. Os testes usaram contas geradas para a revisão e arquivos SQLite temporários.
 
-Em `backend/`, `npm ci` instala o lockfile. `npm test` executa a suíte de HTTP/SQLite em `tests/api.test.js` e a suíte de cálculo e provedor em `tests/finance.test.js`. Foram aprovados 19 testes, com zero falhas e zero testes ignorados. A verificação `npm audit` encontrou zero vulnerabilidades conhecidas nas dependências instaladas nessa data.
+## Achados e correções
 
-- Uma venda de USD 10,25 a R$ 5,00 somou 5.125 centavos ao bruto e recebeu 5.074 centavos após 51 de spread. Uma compra com R$ 100,00 a R$ 5,50 entregou USD 18,00. Asserções independentes conferiram os resultados de cada operação, a soma bruta de R$ 151,25 e os efeitos de cancelar e excluir.
-- As cotações controladas dos testes também cobriram EUR, BTC com oito casas, frações que arredondam a meio centavo, saídas pequenas demais e o limite de um bilhão. A mudança posterior de preço preservou o preço histórico.
-- Os testes do provedor reproduziram tempo limite, falha de rede, HTTP de erro, JSON inválido e resposta incompleta. Durante uma falha externa, o histórico da operação anterior continuou legível. Uma resposta 502 representa preço indisponível e 504 representa tempo limite.
-- Na execução com o provedor de produção, o proxy bloqueou o acesso a `economia.awesomeapi.com.br` (CONNECT 403). Uma conta local obteve 502 em `GET /api/cotacoes` e em `POST /api/transacoes`. A listagem autenticada seguinte retornou 200 e zero registros. Para repetir o teste com preço de mercado, a rede do servidor precisa permitir esse destino por HTTPS.
+| Prioridade | Constatação reproduzida | Correção e verificação |
+|---|---|---|
+| Importante | A conversão de preços para `Number` podia igualar `410000.000000000009` e `410000.000000000008`. Assim, um par com `ask` menor que `bid` podia passar na validação. | O serviço compara inteiros em escala decimal comum. O teste recusa o par invertido e aceita o válido. As fórmulas de compra e venda foram mantidas. |
+| Importante | JSON com charset incompatível recebia 500, embora o servidor estivesse funcionando. | O middleware responde 415 com uma mensagem JSON. O caso de JSON malformado continua retornando 400. |
+| Importante | Após o cadastro, o foco voltava ao corpo da página. O contorno dos campos e o foco sobre o cabeçalho tinham contraste baixo. | O e-mail recebe foco após reativar o formulário. O contraste das bordas passou de 1,77:1 para 4,04:1 e o do foco no cabeçalho de 1,73:1 para 9,62:1. Reavaliados no Chromium. |
+| Importante para execução | O guia usava exemplos de terminal Bash. Os limites de versão declarados impediam instalação estrita em versões LTS que suportam os recursos utilizados. | O README traz dois terminais PowerShell, criação de chave antes do primeiro login e exemplos com `Invoke-RestMethod`. Os manifests e lockfiles dos dois componentes refletem os pisos efetivamente testados. |
 
-## Persistência e reprodução pelo avaliador
+A revisão não encontrou perda de operações, acesso entre contas ou outro defeito crítico nos fluxos exercitados. A consulta de mercado nesta nuvem e a execução nativa em Windows têm as limitações descritas abaixo.
 
-1. Inicie os dois processos indicados no README. Cadastre uma conta e entre. Com as cotações disponíveis, registre uma compra e uma venda. Anote os IDs, a cotação usada e o total movimentado.
-2. Atualize a página, feche o navegador e encerre o processo do back-end. Inicie novamente com o mesmo arquivo SQLite. Em uma janela nova, faça login com a mesma conta. Confira os IDs e valores que anotou.
-3. Cancele uma das simulações. Ela deve permanecer no histórico com o status de cancelada. O indicador de movimentado deve diminuir pelo bruto dessa operação. Exclua o registro e confirme a redução na contagem total.
-4. Em uma segunda conta, confira que o histórico inicial está vazio. A API calcula o proprietário a partir do token verificado pelo servidor.
+## Matriz do barema
 
-## Resultado no navegador
+| Critério e peso | Arquivos e funcionalidade | Verificação desta revisão | Resultado ou pendência |
+|---|---|---|---|
+| Back-end e API · 2,5 | `backend/server.js`, `routes/auth.js`, `routes/transacoes.js` e `services/` sob `backend/`. Cadastro, login, perfil, cotações, prévia, CRUD e resumo. | Suíte fez requisições para Express em uma porta local. Cobriu entradas válidas e ausentes, JSON inválido, charset incorreto e IDs inexistentes. | Criação 201, leituras e cancelamento 200, exclusão 204. Erros retornaram JSON. |
+| Banco de dados · 2,0 | `backend/database.js` cria tabelas estritas, chave estrangeira, e-mail único, índice e restrições financeiras. Rotas usam parâmetros e filtram pelo usuário do JWT. | SQLite em disco, duas simulações, encerramento do processo, nova conexão e novo login. O banco rejeitou excluir um proprietário com transação. Uma conexão de teste em modo somente leitura recusou nova escrita. | Registros e cotação histórica recuperados. A falha de escrita retornou 500 sem expor SQL e a leitura seguinte preservou o histórico. |
+| Front-end · 2,0 | `frontend/index.html`, `login.html`, `css/style.css`, `js/login.js` e `js/script.js` sob `frontend/`. | Chromium em login, cadastro e painel a 320, 390, 768, 1280 e 1920 px. Checados navegação por teclado, foco, legibilidade, sobreposição e rolagem horizontal. | Fluxos aprovados nas cinco larguras. O axe-core 4.14.1 não apontou violações nos critérios WCAG A/AA 2.0/2.1 avaliados em 320 e 1280 px. |
+| JWT e Bcrypt · 1,5 | `backend/middleware/auth.js` e `backend/routes/auth.js`. JWT HS256 com emissor e expiração de uma hora. Hash Bcrypt no cadastro. | Login correto/incorreto, e-mail duplicado, hash no banco, token ausente, inválido e expirado, duas contas e limite de tentativas. | Dados privados exigiram token. Uma conta diferente obteve carteira vazia e 404 ao tentar alterar a operação alheia. Logout limpou a sessão da aba. |
+| Fetch e CORS · 1,0 | `frontend/js/api.js`, `backend/server.js`, `backend/services/cotacoes.js`. | Cliente em 5173 chamou Express em 3000. Foram exercitados preflight, origem recusada, carregamento, erro de rede do navegador, sucesso controlado e indisponibilidade do provedor. | Preflight 204 na origem configurada. O histórico continuou acessível ao falhar a fonte externa. A cotação real ficou bloqueada no proxy. |
+| Documentação e ZIP · 1,0 | README, `docs/ENTENDIMENTO_TECNICO.md`, três `.gitignore`, lockfiles e pacote de entrega. | Conferência de nomes e conteúdo do ZIP, instalação limpa e execução dos dois servidores. | O pacote contém uma raiz `CambioTrack-Pro/` e 27 arquivos. A execução local foi conferida em Linux com PowerShell. Falta preencher a matrícula no nome do arquivo. |
 
-Chromium 156.0.8078.79, dois processos iniciados com `npm start` e SQLite temporário em disco. A automação local usou Playwright para dirigir o navegador. Somente a chamada de saída do servidor para a AwesomeAPI recebeu respostas controladas. O navegador percorreu as rotas HTTP reais do projeto.
+## Operações conferidas no navegador
 
-| Ação | Resultado observado |
-|---|---|
-| Cadastro com confirmação divergente, cadastro válido e login incorreto | A confirmação impediu o envio. O cadastro válido permitiu entrar depois. A senha incorreta recebeu 401. |
-| Vender USD 10 com `bid` 5,00 e comprar EUR com R$ 62 usando `ask` 6,20 | A venda retornou R$ 49,50 líquidos. A compra cobrou R$ 0,62 e entregou EUR 9,90. Após recarregar, o painel mostrou duas ativas e R$ 112,00 movimentados. |
-| Atualizar `bid` do USD para 7,00 e interromper o provedor | O SQLite conservou o preço original de 5,00. O HTTP 503 controlado da fonte produziu 502 na API. O painel bloqueou novos registros e manteve o histórico. |
-| Fechar o navegador, parar o processo da API e consultar o arquivo SQLite | Duas linhas em disco. Um novo processo e um navegador limpo exigiram login e recuperaram as duas operações mesmo com a fonte fora do ar. |
-| Restabelecer o provedor, cancelar a venda e depois excluí-la | Após cancelar, duas registradas e uma ativa. Após excluir, uma registrada e uma ativa. O bruto em ambos os casos foi R$ 62,00. |
-| Logout e expiração | Logout retornou ao login. Em teste com o relógio do processo adiantado duas horas, o JWT antes válido recebeu 401. A interface limpou a sessão e exibiu o aviso de expiração. |
-| Larguras de 320, 390, 768, 1280 e 1920 px | Login, cadastro e painel com duas operações couberam nas cinco larguras sem rolagem horizontal. A navegação por Tab e a associação dos rótulos aos campos foram verificadas. |
+A automação dirigiu **Chromium 156.0.8078.79** contra os dois servidores do projeto. Somente o HTTP de saída para a AwesomeAPI recebeu preços controlados. A autenticação, as requisições do navegador, a escrita e a leitura de SQLite ocorreram nos componentes da aplicação.
 
-## Instalação e empacotamento
+1. Uma confirmação de senha divergente impediu o cadastro. O login rejeitou a senha errada e abriu a carteira vazia com a correta.
+2. Venda de USD 10 a R$ 5,00 por dólar (bid) resultou em R$ 50,00 brutos, R$ 0,50 de taxa e R$ 49,50 líquidos. Compra com R$ 62,00 a R$ 6,20 por euro (ask) resultou em R$ 0,62 de taxa e EUR 9,90 recebidos. Após a recarga, as duas operações somavam R$ 112,00 de volume bruto.
+3. Uma nova cotação não alterou o preço da venda salva. Após fechar o navegador e reiniciar a API com o mesmo arquivo, uma nova sessão recuperou os dois registros. Com o provedor indisponível, o painel manteve o histórico e impediu novo registro. Colocar o navegador offline e voltar à rede exercitou a recuperação do cliente.
+4. Cancelar a venda deixou duas operações, uma ativa e R$ 62,00 de volume. Excluir **a compra** deixou uma venda cancelada, zero ativas e R$ 0,00 movimentados. A segunda conta permaneceu sem operações.
 
-O primeiro `npm ci` desta nuvem tentou gravar no cache padrão do usuário, que o sandbox restringe. A instalação com `npm_config_cache` apontando para um diretório gravável em `/tmp` concluiu com os mesmos lockfiles e verificações de integridade. O cache é uma configuração local do ambiente.
+Nos testes de cálculo, entradas de USD, EUR e BTC cobriram spread de 1%, centavos, precisão de oito casas, arredondamento e limites. Campos de cotação e taxa enviados pelo cliente foram ignorados pelo cálculo do servidor.
 
-A entrega leva os arquivos-fonte do Git sob `CambioTrack-Pro/`. O nome do pacote usa o primeiro nome e o sobrenome do README do Projeto 01. Substitua o campo `Matricula` no nome do ZIP pela matrícula antes do upload individual no portal do CEUB.
+## Rede externa
+
+Em produção, o serviço consulta `https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL` e espera os objetos USDBRL, EURBRL e BTCBRL com `code`, `codein`, `bid`, `ask` e `timestamp`. A variação `pctChange` é opcional. Respostas de teste exercitaram esse formato, falta de um par, preço inválido, HTTP 429 e 500, corpo vazio, JSON inválido, erro de conexão e timeout.
+
+**Tentativa com a fonte real.** O proxy da nuvem devolveu CONNECT 403 antes de alcançar a AwesomeAPI. No processo real local, a consulta e a tentativa de gravar uma venda retornaram 502. O histórico autenticado continuou respondendo 200. A resposta de mercado atual e o formato efetivamente enviado pelo provedor nesta data ficaram sem confirmação. Para conferi-los em outra rede, use a consulta de preços no README.
+
+## Instalação, versões e ZIP
+
+- **Node.** Em Linux x64, Node 22.21.0 e 24.5.0 passaram por `npm ci --engine-strict` em ambos os componentes e pelos 21 testes com o padrão de arquivos enviado literalmente ao runner. Em cada versão, `npm start` iniciou os dois servidores. As páginas de login responderam 200, a rota privada sem token respondeu 401 e o preflight entre as portas locais retornou 204. Em 22.20.0 e 24.4.1 o Node rejeitou a opção `--use-env-proxy`. O README recomenda um patch atualizado da linha 24 LTS.
+- **PowerShell.** No Debian 13, PowerShell 7.6.3, Node 24.22.1 e npm 11.9.0 foram usados no fluxo de extração, configuração do arquivo privado, instalação, suíte, login e chamadas HTTP do README. Em Linux, o executável é `npm`; no Windows o README usa `npm.cmd`. O pacote Bcrypt inclui binários para Windows x64 e ARM64. O ensaio não abrangeu Windows nativo, Windows PowerShell 5.1 ou o VS Code em Windows.
+- **Dependências.** `npm audit --omit=dev` encontrou zero vulnerabilidades conhecidas nas dependências de produção do back-end nesta revisão. O sandbox usa um cache npm gravável em `/tmp`. Em uma instalação comum, o npm usa o cache do próprio usuário.
+- **Entrega.** O empacotamento inclui os arquivos de código do Git e `backend/.env.example`. A inspeção verificou a ausência de dependências, repositório Git interno, banco, logs, chaves e configuração privada. Substitua `Matricula` no nome do ZIP pela matrícula do estudante antes de enviar ao portal.

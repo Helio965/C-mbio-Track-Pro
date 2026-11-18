@@ -89,9 +89,19 @@ test('campos ausentes ou inválidos impedem usar a resposta parcial', async () =
   }
   await assert.rejects(buscarCotacoes(async () => Response.json({})), { status: 502 });
 });
+test('o preço de venda da fonte não pode ficar abaixo do preço de compra por uma casa decimal', async () => {
+  const dados = respostaDaFonte();
+  dados.BTCBRL.bid = '410000.000000000009';
+  dados.BTCBRL.ask = '410000.000000000008';
+  await assert.rejects(buscarCotacoes(async () => Response.json(dados)), { status: 502 });
+  dados.BTCBRL.ask = '410000.00000000001';
+  const resultado = await buscarCotacoes(async () => Response.json(dados));
+  assert.equal(resultado.BTC.ask, dados.BTCBRL.ask);
+});
 test('falhas de rede, HTTP, JSON e tempo limite recebem erros públicos', async () => {
   for (const resposta of [async () => { throw new TypeError('network'); },
-    async () => new Response(null, { status: 429 }), async () => new Response('<html>')]) {
+    async () => new Response(null, { status: 429 }), async () => new Response(null, { status: 500 }),
+    async () => new Response(''), async () => new Response('<html>')]) {
     await assert.rejects(buscarCotacoes(resposta), { status: 502 });
   }
   // Cancela exatamente como uma requisição pendente, inclusive após ultrapassar o prazo.

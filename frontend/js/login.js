@@ -50,20 +50,23 @@ id("formulario-acesso").addEventListener("submit", async evento => {
     if (cadastro) {
       mensagem("Criando conta…");
       await api("auth/register", { privada: false, metodo: "POST", corpo: { ...dados, nome: id("nome").value.trim() } });
-      mudarModo(false);
-      mensagem("Conta criada. Entre com seu e-mail e senha.", "sucesso");
     } else {
       mensagem("Entrando…");
       const { token } = await api("auth/login", { privada: false, metodo: "POST", corpo: dados });
       iniciarSessao(token);
       location.replace("index.html");
+      return;
     }
   } catch (erro) {
     mensagem(erro.message, "erro");
+    return;
   } finally {
     id("campos-acesso").disabled = false;
     id("alternar-modo").disabled = false;
   }
+  // O campo de e-mail só pode receber o foco depois que o formulário for reativado.
+  mudarModo(false);
+  mensagem("Conta criada. Entre com seu e-mail e senha.", "sucesso");
 });
 
 if (tokenAtual()) {

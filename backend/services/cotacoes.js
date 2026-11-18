@@ -12,12 +12,19 @@ function precoValido(valor) {
   return typeof valor === 'string' && /^\d{1,12}(\.\d{1,12})?$/.test(valor) && Number(valor) > 0;
 }
 
+// Ambos os preços são validados com até 12 casas. Igualar a escala preserva
+// a ordem mesmo se os valores diferirem apenas no último dígito decimal.
+function precoEmTrilionesimos(valor) {
+  const [inteira, fracao = ''] = valor.split('.');
+  return BigInt(inteira + fracao.padEnd(12, '0'));
+}
+
 function normalizarCotacoes(dados) {
   const cotacoes = {};
   for (const ativo of ATIVOS) {
     const item = dados?.[ativo + 'BRL'];
     if (item?.code !== ativo || item.codein !== 'BRL' ||
-        !precoValido(item.bid) || !precoValido(item.ask) || Number(item.ask) < Number(item.bid)) {
+        !precoValido(item.bid) || !precoValido(item.ask) || precoEmTrilionesimos(item.ask) < precoEmTrilionesimos(item.bid)) {
       throw falhaDaFonte('Preços inválidos ou ausentes para ' + ativo + '/BRL.');
     }
     // O timestamp da fonte está em segundos. Não substituímos a data por uma data local.
