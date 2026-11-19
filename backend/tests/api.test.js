@@ -1,5 +1,11 @@
 'use strict';
 
+// ==========================================================================
+// TESTES AUTOMÁTICOS DA API (npm test)
+// Cada teste liga o servidor real (Express) numa porta livre, com um banco SQLite
+// temporário e cotações fixas, faz requisições HTTP como o navegador faria e confere
+// as respostas. O banco real em backend/data nunca é usado.
+// ==========================================================================
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
@@ -22,6 +28,11 @@ const cotacoesFixas = {
 const venda = { tipo: 'VENDA', ativo: 'USD', montante: '10.25' };
 const compra = { tipo: 'COMPRA', ativo: 'USD', montante: '100' };
 
+/**
+ * Faz uma chamada HTTP ao servidor de teste e confere o código de resposta esperado.
+ * Em respostas de erro (4xx/5xx), exige o campo "erro" no JSON; em 204, corpo vazio.
+ * @returns {Promise<object|undefined>} Corpo JSON da resposta.
+ */
 async function requisitar(base, metodo, rota, status, dados, token) {
   const cabecalhos = {};
   if (token) cabecalhos.Authorization = 'Bearer ' + token;
@@ -46,6 +57,11 @@ async function requisitar(base, metodo, rota, status, dados, token) {
   return corpo;
 }
 
+/**
+ * Liga uma API completa só para o teste: pasta temporária com banco próprio, chave JWT
+ * aleatória e porta livre (0 = o sistema escolhe). ligar/desligar permitem simular um
+ * reinício; ao final do teste (t.after), o servidor é desligado e a pasta é apagada.
+ */
 async function ambiente(t, buscarCotacoes = async () => cotacoesFixas) {
   const diretorio = await mkdtemp(path.join(tmpdir(), 'cambiotrack-api-'));
   const arquivo = path.join(diretorio, 'carteira.sqlite');
@@ -81,6 +97,7 @@ async function ambiente(t, buscarCotacoes = async () => cotacoesFixas) {
   };
 }
 
+/** Dados de uma conta de teste, com senha aleatória a cada execução. */
 function dadosConta(id = 'principal') {
   return {
     nome: 'Conta ' + id,
@@ -89,6 +106,7 @@ function dadosConta(id = 'principal') {
   };
 }
 
+/** Cadastra a conta e faz login; devolve o token JWT usado nas rotas privadas. */
 async function cadastrarEEntrar(api, dados = dadosConta()) {
   await api.req('POST', '/auth/register', 201, dados);
   const { token, usuario } = await api.req('POST', '/auth/login', 200, dados);
@@ -96,6 +114,8 @@ async function cadastrarEEntrar(api, dados = dadosConta()) {
   return { token, usuario, dados };
 }
 
+// O cadastro guarda só o hash Bcrypt, recusa e-mail repetido e o login devolve um JWT
+// com conta, data de criação e vencimento. Erro de senha e de e-mail têm a mesma mensagem.
 test('cadastro, hash bcrypt, e-mail único e token com expiração', async t => {
   const api = await ambiente(t);
   const dados = dadosConta();
@@ -112,6 +132,7 @@ test('cadastro, hash bcrypt, e-mail único e token com expiração', async t => 
   const sessao = await api.req('POST', '/auth/login', 200, dados);
   const claims = jwt.verify(sessao.token, api.jwtSecret, { algorithms: ['HS256'] });
   assert.equal(claims.sub, String(usuario.id));
+  assert.equal(claims.criado_em, usuario.criado_em);
   assert.ok(claims.exp > claims.iat);
   const perfil = await api.req('GET', '/auth/me', 200, undefined, sessao.token);
   for (const pessoa of [usuario, sessao.usuario, perfil.usuario]) {
@@ -124,6 +145,7 @@ test('cadastro, hash bcrypt, e-mail único e token com expiração', async t => 
   assert.equal(errEmail.erro, errSenha.erro);
 });
 
+// Dados inválidos não criam contas, e o banco tem as chaves estrangeiras ligadas.
 test('validação do cadastro e integridade do SQLite', async t => {
   const api = await ambiente(t);
   const dados = dadosConta();
@@ -140,6 +162,8 @@ test('validação do cadastro e integridade do SQLite', async t => {
   assert.throws(() => abrirBanco(api.diretorio));
 });
 
+// Sem token, todas as rotas privadas respondem 401. Tokens forjados com a data de criação
+// correta só falham pelo defeito testado (vencido, outra chave ou sem a data da conta).
 test('cada rota privada exige autenticação; me recusa tokens inválidos ou expirados', async t => {
   const api = await ambiente(t);
   for (const [metodo, rota] of [
@@ -150,18 +174,39 @@ test('cada rota privada exige autenticação; me recusa tokens inválidos ou exp
     await api.req(metodo, rota, 401);
   }
   const { usuario } = await cadastrarEEntrar(api);
-  const expirado = jwt.sign({}, api.jwtSecret, {
-    algorithm: 'HS256', issuer: 'cambio-track-pro', subject: String(usuario.id), expiresIn: -1
-  });
+  const conteudo = { criado_em: usuario.criado_em };
+  const opcoes = { algorithm: 'HS256', issuer: 'cambio-track-pro', subject: String(usuario.id) };
+  // Controle: um token montado assim, com a chave certa e dentro da validade, é aceito.
+  const correto = jwt.sign(conteudo, api.jwtSecret, { ...opcoes, expiresIn: '1h' });
+  await api.req('GET', '/auth/me', 200, undefined, correto);
+  const expirado = jwt.sign(conteudo, api.jwtSecret, { ...opcoes, expiresIn: -1 });
   const outraChave = randomBytes(32);
-  const assinaturaInvalida = jwt.sign({}, outraChave, {
-    algorithm: 'HS256', issuer: 'cambio-track-pro', subject: String(usuario.id), expiresIn: '1h'
-  });
-  for (const token of ['invalido', expirado, assinaturaInvalida]) {
+  const assinaturaInvalida = jwt.sign(conteudo, outraChave, { ...opcoes, expiresIn: '1h' });
+  const semDataDaConta = jwt.sign({}, api.jwtSecret, { ...opcoes, expiresIn: '1h' });
+  for (const token of ['invalido', expirado, assinaturaInvalida, semDataDaConta]) {
     await api.req('GET', '/auth/me', 401, undefined, token);
   }
 });
 
+// Quem apaga o banco para recomeçar pode dar o mesmo número de conta a outra pessoa.
+// O token antigo não pode abrir a carteira dessa nova conta.
+test('token emitido antes de recriar o banco não abre a conta que recebeu o mesmo número', async t => {
+  const api = await ambiente(t);
+  const antiga = await cadastrarEEntrar(api, dadosConta('antiga'));
+  // Apaga o arquivo SQLite e liga a API de novo com a mesma JWT_SECRET.
+  await api.desligar();
+  await rm(api.arquivo, { force: true });
+  await api.ligar();
+  const nova = await cadastrarEEntrar(api, dadosConta('nova'));
+  assert.equal(nova.usuario.id, antiga.usuario.id); // o banco novo recomeça a numeração
+  await api.req('GET', '/auth/me', 401, undefined, antiga.token);
+  await api.req('GET', '/transacoes', 401, undefined, antiga.token);
+  const perfil = await api.req('GET', '/auth/me', 200, undefined, nova.token);
+  assert.equal(perfil.usuario.email, nova.dados.email);
+});
+
+// CORS: o front-end configurado passa no preflight; outra origem recebe 403. Erros de
+// formato do corpo (JSON quebrado, charset errado) também respondem em JSON.
 test('preflight permite o cliente configurado e erros do protocolo usam JSON', async t => {
   const api = await ambiente(t);
   const origem = 'http://localhost:5173';
@@ -189,6 +234,7 @@ test('preflight permite o cliente configurado e erros do protocolo usam JSON', a
   assert.deepEqual(Object.keys(await charset.json()), ['erro']);
 });
 
+// Depois de 10 logins errados, o 11º recebe 429 (excesso de tentativas).
 test('limite de dez tentativas de login falhas', async t => {
   const api = await ambiente(t);
   const dados = dadosConta();
@@ -198,6 +244,8 @@ test('limite de dez tentativas de login falhas', async t => {
   await api.req('POST', '/auth/login', 429, dados);
 });
 
+// Fluxo completo da carteira com valores conferidos à mão: prévia, venda, compra,
+// resumo, cancelamento (fica no histórico) e exclusão (sai do banco).
 test('prévia, compra e venda usam a cotação do servidor; resumo acompanha cancelamento e exclusão', async t => {
   let cotacoes = structuredClone(cotacoesFixas);
   const api = await ambiente(t, async () => cotacoes);
@@ -218,6 +266,7 @@ test('prévia, compra e venda usam a cotação do servidor; resumo acompanha can
   assert.equal(Number(c.quantidade_ativo), 18); // (R$ 100 − R$ 1) / 5,50
   assert.equal(c.data_cotacao, cotacoes.USD.data);
 
+  // Um preço novo na fonte não altera as operações já gravadas.
   cotacoes = { ...cotacoes, USD: { ...cotacoes.USD, bid: '7.5' } };
   const resumo = () => api.req('GET', '/transacoes/resumo', 200, undefined, token);
   const historico = () => api.req('GET', '/transacoes', 200, undefined, token);
@@ -240,6 +289,7 @@ test('prévia, compra e venda usam a cotação do servidor; resumo acompanha can
   await api.req('DELETE', '/transacoes/' + v.id, 404, undefined, token);
 });
 
+// Uma conta não vê, não cancela e não exclui as operações de outra.
 test('carteiras independentes para duas contas', async t => {
   const api = await ambiente(t);
   const a = await cadastrarEEntrar(api);
@@ -255,6 +305,8 @@ test('carteiras independentes para duas contas', async t => {
   assert.equal(salvas[0].status, 'ATIVA');
 });
 
+// Entradas malformadas param antes de consultar a fonte; com a fonte fora do ar, novas
+// operações recebem 502, mas o histórico já salvo continua legível.
 test('entrada inválida e indisponibilidade externa conservam o histórico anterior', async t => {
   let disponivel = true;
   let consultas = 0;
@@ -278,6 +330,8 @@ test('entrada inválida e indisponibilidade externa conservam o histórico anter
   await api.req('DELETE', '/transacoes/abc', 400, undefined, token);
 });
 
+// Persistência: desligar o servidor e fechar o banco não apaga nada; um novo login
+// encontra exatamente a mesma operação.
 test('servidor e conexão SQLite reabertos leem a operação em uma nova sessão', async t => {
   const api = await ambiente(t);
   const { dados, usuario, token } = await cadastrarEEntrar(api);
@@ -292,6 +346,45 @@ test('servidor e conexão SQLite reabertos leem a operação em uma nova sessão
   assert.deepEqual(historico, [salva]);
 });
 
+// Configuração de produção (sem cotações injetadas): dois pedidos seguidos geram uma única
+// consulta à AwesomeAPI, e a chave opcional vai no cabeçalho x-api-key.
+test('sem fonte injetada, a API reaproveita a consulta à AwesomeAPI entre pedidos seguidos e envia a chave opcional', async t => {
+  // Substitui apenas a saída HTTPS para a AwesomeAPI; as chamadas ao servidor local seguem reais.
+  const fetchOriginal = globalThis.fetch;
+  const pedidosExternos = [];
+  const segundos = String(Math.floor(Date.parse('2026-11-10T10:00:00.000Z') / 1000));
+  globalThis.fetch = async (url, opcoes) => {
+    if (!String(url).startsWith('https://economia.awesomeapi.com.br/')) return fetchOriginal(url, opcoes);
+    pedidosExternos.push(new Headers(opcoes.headers));
+    return Response.json(Object.fromEntries(Object.entries(cotacoesFixas).map(([code, { bid, ask }]) =>
+      [code + 'BRL', { code, codein: 'BRL', bid, ask, timestamp: segundos, pctChange: '0.5' }])));
+  };
+  const chaveAnterior = process.env.AWESOMEAPI_KEY;
+  process.env.AWESOMEAPI_KEY = 'chave-de-teste';
+  const diretorio = await mkdtemp(path.join(tmpdir(), 'cambiotrack-fonte-'));
+  const db = abrirBanco(path.join(diretorio, 'carteira.sqlite'));
+  const servidor = createApp({ db, jwtSecret: randomBytes(32).toString('hex') }).listen(0, '127.0.0.1');
+  await once(servidor, 'listening');
+  t.after(async () => {
+    globalThis.fetch = fetchOriginal;
+    if (chaveAnterior === undefined) delete process.env.AWESOMEAPI_KEY;
+    else process.env.AWESOMEAPI_KEY = chaveAnterior;
+    await new Promise(resolve => servidor.close(resolve));
+    db.close();
+    await rm(diretorio, { recursive: true, force: true });
+  });
+  const base = 'http://127.0.0.1:' + servidor.address().port + '/api';
+  const primeira = await requisitar(base, 'GET', '/cotacoes', 200);
+  const segunda = await requisitar(base, 'GET', '/cotacoes', 200);
+  assert.deepEqual(segunda, primeira);
+  assert.equal(primeira.USD.bid, cotacoesFixas.USD.bid);
+  assert.equal(primeira.USD.data, '2026-11-10T10:00:00.000Z');
+  assert.equal(pedidosExternos.length, 1);
+  assert.equal(pedidosExternos[0].get('x-api-key'), 'chave-de-teste');
+});
+
+// O banco recusa apagar uma conta que tem operações, e uma falha de escrita responde
+// 500 genérico sem perder o que já estava salvo.
 test('SQLite impede registros órfãos e falhas de escrita preservam a carteira', async t => {
   const api = await ambiente(t);
   const { token, usuario } = await cadastrarEEntrar(api);

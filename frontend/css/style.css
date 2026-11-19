@@ -204,7 +204,9 @@ h3 {
 
 /* ==========================================================================
    4. FORMULÁRIO E BOTÕES
-   Os campos usam Flexbox em coluna. Validações nativas são definidas no HTML.
+   Os campos usam Flexbox em coluna. Validações nativas: required, type e maxlength ficam
+   no HTML; o JavaScript ajusta minLength e required conforme o modo da tela de acesso e
+   usa setCustomValidity para o valor e a confirmação da senha.
    ========================================================================== */
 fieldset {
   min-width: 0;
@@ -309,7 +311,8 @@ button:disabled {
 
 /* ==========================================================================
    5. RESULTADO E INDICADORES
-   Os valores são calculados no JavaScript; o CSS define apenas a apresentação.
+   Os valores vêm da API (o servidor calcula o resultado e o banco soma os indicadores);
+   o JavaScript só os exibe e o CSS define apenas a apresentação.
    ========================================================================== */
 .result-section {
   border-top: 4px solid #0066cc;
@@ -567,7 +570,8 @@ button:disabled {
 
 /* ==========================================================================
    8. RESPONSIVIDADE
-   O edital exige três faixas. Cada uma reorganiza as grades de fato.
+   Três faixas (desktop, tablet e smartphone) reorganizam as grades de fato.
+   Media queries aplicam regras só quando a largura da tela está no intervalo indicado.
    ========================================================================== */
 
 /* DESKTOP: duas colunas de trabalho, com campos empilhados em telas menores. */
@@ -773,5 +777,23 @@ body {
 
   .acoes button {
     width: 100%;
+  }
+}
+
+/* TELAS MUITO ESTREITAS (até 360 px): os detalhes de cada operação ficam em uma coluna
+   e os números grandes ficam um pouco menores, para que valores longos, como a cotação
+   do bitcoin acima de R$ 1 milhão, não sejam quebrados no meio. */
+@media (max-width: 360px) {
+  .operacao-detalhes {
+    grid-template-columns: 1fr;
+  }
+
+  .cotacao-valor,
+  .stat-card dd {
+    font-size: 1.5rem;
+  }
+
+  #resultado-liquido {
+    font-size: 1.6rem;
   }
 }

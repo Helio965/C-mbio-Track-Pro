@@ -1,7 +1,13 @@
 <!DOCTYPE html>
+<!-- =====================================================================
+     PAINEL DA CARTEIRA (index.html)
+     Só aparece depois que js/script.js confirma o token JWT com a API.
+     Os valores desta página são preenchidos pelo JavaScript.
+     ===================================================================== -->
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <!-- viewport: a largura da página acompanha a tela do celular (base da responsividade). -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Consulte cotações e simule conversões de dólar, euro e bitcoin para real com o CâmbioTrack.">
   <title>Carteira · CâmbioTrack Pro</title>
@@ -9,7 +15,10 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- Atalho para quem navega pelo teclado: aparece ao receber o foco com Tab. -->
   <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+
+  <!-- ===================== CABEÇALHO: marca, nome da conta e botão Sair ===================== -->
   <header class="navbar">
     <div>
       <h1 class="brand"><span class="brand-mark" aria-hidden="true">⇄</span> CâmbioTrack <span class="brand-pro">Pro</span></h1>
@@ -18,8 +27,12 @@
     <div class="conta"><span id="usuario"></span><button id="sair" class="btn-secondary" type="button">Sair</button></div>
   </header>
 
+  <!-- Mensagem exibida enquanto o token é verificado (ou se a API estiver fora do ar). -->
   <p id="status-painel" class="container" role="status">Verificando acesso à carteira…</p>
+  <!-- O conteúdo fica oculto (hidden) até a sessão ser confirmada pelo servidor. -->
   <main id="conteudo" class="container" hidden>
+
+    <!-- ===================== COTAÇÕES: preços de venda (bid) e compra (ask) ===================== -->
     <section id="secao-cotacoes" class="quotes-section" aria-labelledby="titulo-cotacoes" aria-busy="true">
       <div class="section-header">
         <h2 id="titulo-cotacoes">Cotações de referência</h2>
@@ -74,11 +87,13 @@
         Fonte: AwesomeAPI · Reais por unidade · Horário de Brasília
       </p>
     </section>
+    <!-- ===================== SIMULAÇÃO: formulário (esquerda) e resultado (direita) ===================== -->
     <div class="conversion-grid">
       <section class="form-section" aria-labelledby="titulo-conversor">
         <h2 id="titulo-conversor">Simular operação</h2>
         <p class="subtitle">Escolha o sentido da operação e o ativo.</p>
 
+        <!-- O fieldset começa desativado e só é liberado quando há cotações válidas. -->
         <form id="formulario-conversao">
           <fieldset id="campos-conversao" disabled>
             <legend class="sr-only">Dados da conversão</legend>
@@ -129,6 +144,7 @@
 
         <p class="nota">Simulação educativa. Nenhuma compra ou transferência é realizada.</p>
       </section>
+      <!-- Prévia calculada pela API. aria-live faz leitores de tela anunciarem as mudanças. -->
       <section class="result-section" aria-labelledby="titulo-resultado" aria-live="polite" aria-atomic="true">
         <h2 id="titulo-resultado">Resultado estimado</h2>
         <p id="resumo-origem" class="subtitle">Informe um valor no conversor</p>
@@ -156,6 +172,7 @@
         </p>
       </section>
     </div>
+    <!-- ===================== INDICADORES: totais calculados pelo banco de dados ===================== -->
     <section class="metrics-section" aria-labelledby="titulo-indicadores">
       <div class="section-header">
         <h2 id="titulo-indicadores">Indicadores da carteira</h2>
@@ -177,6 +194,7 @@
         </div>
       </dl>
     </section>
+    <!-- ===================== HISTÓRICO: cartões criados pelo JavaScript a partir do SQLite ===================== -->
     <section class="list-section" aria-labelledby="titulo-historico">
       <h2 id="titulo-historico">Histórico de operações</h2>
       <p id="mensagem-operacao" class="mensagem-operacao" role="status" aria-live="polite"></p>
@@ -203,6 +221,8 @@
   <footer class="footer">
     <p>CâmbioTrack Pro · Projeto 02 — Desenvolvimento Web</p>
   </footer>
+  <!-- Script ao final do body: os elementos já existem quando o JavaScript é executado.
+       type="module" permite importar as funções de js/api.js. -->
   <script type="module" src="js/script.js"></script>
 </body>
 </html>
