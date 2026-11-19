@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { calcular, validarEntrada } = require('../services/cambioService');
-const { buscarCotacoes } = require('../services/cotacoes');
+const { buscarCotacoes, criarConsultaComCache } = require('../services/cotacoes');
 
 // Preços didáticos exclusivos do teste, com diferença visível entre bid e ask.
 const data = '2026-10-29T12:00:00.000Z';
@@ -110,4 +110,49 @@ test('falhas de rede, HTTP, JSON e tempo limite recebem erros públicos', async 
     signal.addEventListener('abort', () => { clearTimeout(recurso); reject(signal.reason); }, { once: true });
   });
   await assert.rejects(buscarCotacoes(pendente, 5), { status: 504 });
+});
+test('HTTP 429 da fonte explica o limite de uso em vez de indisponibilidade genérica', async () => {
+  const resposta = async () => Response.json({ status: 429, code: 'QuotaExceeded' }, { status: 429 });
+  await assert.rejects(buscarCotacoes(resposta), erro =>
+    erro.status === 502 && /limite de uso/.test(erro.message) && /429/.test(erro.message));
+});
+test('a chave opcional da AwesomeAPI vai no cabeçalho x-api-key, nunca na URL', async () => {
+  const pedidos = [];
+  const fonte = async (url, { headers }) => {
+    pedidos.push({ url, headers: new Headers(headers) });
+    return Response.json(respostaDaFonte());
+  };
+  await buscarCotacoes(fonte, 1000, ' chave-de-teste ');
+  await buscarCotacoes(fonte, 1000, '');
+  assert.equal(pedidos[0].headers.get('x-api-key'), 'chave-de-teste');
+  assert.equal(pedidos[1].headers.has('x-api-key'), false);
+  assert.ok(pedidos.every(({ url }) => !url.includes('chave')));
+});
+test('a API reaproveita a última cotação válida por 30 s e nunca guarda falhas', async () => {
+  let relogio = 0;
+  let chamadas = 0;
+  let falhar = false;
+  const consultar = async () => {
+    chamadas++;
+    if (falhar) throw Object.assign(new Error('fonte fora do ar'), { status: 502 });
+    return { consulta: chamadas };
+  };
+  const cotacoesComCache = criarConsultaComCache(consultar, 30000, () => relogio);
+  assert.deepEqual(await cotacoesComCache(), { consulta: 1 });
+  relogio = 29999;
+  assert.deepEqual(await cotacoesComCache(), { consulta: 1 });
+  assert.equal(chamadas, 1);
+  relogio = 30000;
+  assert.deepEqual(await cotacoesComCache(), { consulta: 2 });
+
+  falhar = true;
+  relogio = 70000;
+  await assert.rejects(cotacoesComCache(), { status: 502 });
+  await assert.rejects(cotacoesComCache(), { status: 502 });
+  assert.equal(chamadas, 4); // cada pedido após a falha consulta a fonte outra vez
+
+  falhar = false;
+  const [primeira, segunda] = await Promise.all([cotacoesComCache(), cotacoesComCache()]);
+  assert.equal(primeira, segunda);
+  assert.equal(chamadas, 5); // pedidos simultâneos compartilham uma única consulta
 });

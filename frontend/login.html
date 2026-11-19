@@ -1,4 +1,8 @@
 <!doctype html>
+<!-- =====================================================================
+     TELA DE ACESSO (login.html): entrar ou criar conta.
+     O comportamento do formulário está em js/login.js.
+     ===================================================================== -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -6,6 +10,7 @@
   <title>Acesso à carteira · CâmbioTrack Pro</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="css/style.css">
+  <!-- Scripts do tipo module só rodam depois que a página foi carregada. -->
   <script src="js/login.js" type="module"></script>
 </head>
 <body class="auth-page">
@@ -16,6 +21,8 @@
     <section class="auth-card form-section" aria-labelledby="titulo-acesso">
       <h2 id="titulo-acesso">Acessar minha carteira</h2>
       <p class="subtitle" id="descricao-acesso">Entre para consultar suas simulações de câmbio.</p>
+      <!-- Um único formulário serve para login e cadastro. Nome e confirmação
+           só aparecem (e só são obrigatórios) no modo cadastro. -->
       <form id="formulario-acesso">
         <fieldset id="campos-acesso">
           <legend class="sr-only">Dados de acesso</legend>
@@ -36,10 +43,12 @@
             <label for="confirmacao">Confirme a senha</label>
             <input id="confirmacao" name="confirmacao" type="password" autocomplete="new-password" disabled>
           </div>
+          <!-- Mensagens de carregamento, erro e sucesso; role="status" é lido por leitores de tela. -->
           <p id="mensagem-acesso" class="mensagem-operacao" role="status"></p>
           <button id="entrar" class="btn-primary" type="submit">Entrar</button>
         </fieldset>
       </form>
+      <!-- Alterna entre os modos "Entrar" e "Criar conta". -->
       <div class="auth-switch">
         <span id="pergunta-modo">Primeiro acesso?</span>
         <button id="alternar-modo" class="link-button" type="button">Criar conta</button>

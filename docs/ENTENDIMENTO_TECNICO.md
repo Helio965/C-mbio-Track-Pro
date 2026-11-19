@@ -82,6 +82,8 @@ Ao pedir cotações, o servidor consulta USD/BRL, EUR/BRL e BTC/BRL no mesmo ped
 
 Uma demora além de 12 segundos interrompe o pedido à fonte. Um erro externo ou um preço inválido impede gravar o registro. O histórico, o cancelamento, a exclusão e o resumo usam somente a base local, portanto continuam disponíveis quando as cotações falham. A consulta é sob demanda, com o horário retornado pela fonte. Uma nova consulta pode devolver o mesmo preço.
 
+Sem chave, a AwesomeAPI repete a mesma resposta durante 1 minuto e limita o número de consultas por endereço de internet; ao passar do limite responde HTTP 429. Por isso `criarConsultaComCache()`, em `backend/services/cotacoes.js`, reaproveita a última cotação válida por até 30 segundos: a prévia, que roda a cada pausa na digitação, deixa de gastar a cota sem ganhar preço mais novo. Pedidos simultâneos compartilham uma consulta, e uma falha nunca fica guardada. Se o limite for atingido, a mensagem explica o motivo, e a variável opcional `AWESOMEAPI_KEY` envia a chave gratuita da fonte no cabeçalho `x-api-key`.
+
 ## Roteiro para explicar o projeto
 
 1. Faça login e acompanhe as chamadas na aba de rede do navegador. Identifique quais respostas são públicas e quais solicitam o JWT. Preserve a privacidade do token ao compartilhar a tela.

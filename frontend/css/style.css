@@ -567,7 +567,8 @@ button:disabled {
 
 /* ==========================================================================
    8. RESPONSIVIDADE
-   O edital exige três faixas. Cada uma reorganiza as grades de fato.
+   Três faixas (desktop, tablet e smartphone) reorganizam as grades de fato.
+   Media queries aplicam regras só quando a largura da tela está no intervalo indicado.
    ========================================================================== */
 
 /* DESKTOP: duas colunas de trabalho, com campos empilhados em telas menores. */
@@ -773,5 +774,23 @@ body {
 
   .acoes button {
     width: 100%;
+  }
+}
+
+/* TELAS MUITO ESTREITAS (até 360 px): os detalhes de cada operação ficam em uma coluna
+   e os números grandes ficam um pouco menores, para que valores longos, como a cotação
+   do bitcoin acima de R$ 1 milhão, não sejam quebrados no meio. */
+@media (max-width: 360px) {
+  .operacao-detalhes {
+    grid-template-columns: 1fr;
+  }
+
+  .cotacao-valor,
+  .stat-card dd {
+    font-size: 1.5rem;
+  }
+
+  #resultado-liquido {
+    font-size: 1.6rem;
   }
 }

@@ -292,6 +292,41 @@ test('servidor e conexão SQLite reabertos leem a operação em uma nova sessão
   assert.deepEqual(historico, [salva]);
 });
 
+test('sem fonte injetada, a API consulta a AwesomeAPI uma vez a cada 30 s e envia a chave opcional', async t => {
+  // Substitui apenas a saída HTTPS para a AwesomeAPI; as chamadas ao servidor local seguem reais.
+  const fetchOriginal = globalThis.fetch;
+  const pedidosExternos = [];
+  const segundos = String(Math.floor(Date.parse('2026-11-10T10:00:00.000Z') / 1000));
+  globalThis.fetch = async (url, opcoes) => {
+    if (!String(url).startsWith('https://economia.awesomeapi.com.br/')) return fetchOriginal(url, opcoes);
+    pedidosExternos.push(new Headers(opcoes.headers));
+    return Response.json(Object.fromEntries(Object.entries(cotacoesFixas).map(([code, { bid, ask }]) =>
+      [code + 'BRL', { code, codein: 'BRL', bid, ask, timestamp: segundos, pctChange: '0.5' }])));
+  };
+  const chaveAnterior = process.env.AWESOMEAPI_KEY;
+  process.env.AWESOMEAPI_KEY = 'chave-de-teste';
+  const diretorio = await mkdtemp(path.join(tmpdir(), 'cambiotrack-fonte-'));
+  const db = abrirBanco(path.join(diretorio, 'carteira.sqlite'));
+  const servidor = createApp({ db, jwtSecret: randomBytes(32).toString('hex') }).listen(0, '127.0.0.1');
+  await once(servidor, 'listening');
+  t.after(async () => {
+    globalThis.fetch = fetchOriginal;
+    if (chaveAnterior === undefined) delete process.env.AWESOMEAPI_KEY;
+    else process.env.AWESOMEAPI_KEY = chaveAnterior;
+    await new Promise(resolve => servidor.close(resolve));
+    db.close();
+    await rm(diretorio, { recursive: true, force: true });
+  });
+  const base = 'http://127.0.0.1:' + servidor.address().port + '/api';
+  const primeira = await requisitar(base, 'GET', '/cotacoes', 200);
+  const segunda = await requisitar(base, 'GET', '/cotacoes', 200);
+  assert.deepEqual(segunda, primeira);
+  assert.equal(primeira.USD.bid, cotacoesFixas.USD.bid);
+  assert.equal(primeira.USD.data, '2026-11-10T10:00:00.000Z');
+  assert.equal(pedidosExternos.length, 1);
+  assert.equal(pedidosExternos[0].get('x-api-key'), 'chave-de-teste');
+});
+
 test('SQLite impede registros órfãos e falhas de escrita preservam a carteira', async t => {
   const api = await ambiente(t);
   const { token, usuario } = await cadastrarEEntrar(api);

@@ -1,13 +1,50 @@
+// ==========================================================================
+// BANCO DE DADOS (SQLite)
+// Este arquivo abre o arquivo do banco e cria as tabelas na primeira execução.
+// O SQLite guarda tudo em um único arquivo no disco. Por isso as operações
+// continuam salvas depois que o navegador é fechado ou a API é reiniciada.
+// O módulo node:sqlite já vem com o Node.js: não é preciso instalar um servidor de banco.
+// ==========================================================================
 const { DatabaseSync } = require('node:sqlite');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 
-// Um arquivo contém toda a carteira. As conexões em memória ficam reservadas aos testes.
+/**
+ * Abre (ou cria) o banco e garante que as tabelas existam.
+ * @param {string} filename Caminho do arquivo. Usa DB_PATH do .env ou backend/data/cambio.sqlite.
+ *                          ':memory:' cria um banco temporário na memória, usado só em testes.
+ * @returns {DatabaseSync} Conexão pronta para consultas.
+ */
 function abrirBanco(filename = process.env.DB_PATH || path.join(__dirname, 'data', 'cambio.sqlite')) {
+  // Cria a pasta do arquivo (por exemplo, backend/data) caso ainda não exista.
   if (filename !== ':memory:') mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
   try {
-    // A chave estrangeira impede transações órfãs. O SQLite aplica essa regra por conexão.
+    // O texto SQL abaixo é executado de uma vez:
+    // - PRAGMA foreign_keys liga a verificação de chave estrangeira (vale para cada conexão).
+    // - PRAGMA busy_timeout faz o SQLite esperar até 5 s se o arquivo estiver ocupado.
+    // - BEGIN/COMMIT criam a estrutura como um bloco único: ou tudo é criado, ou nada.
+    // - "IF NOT EXISTS" preserva os dados já gravados quando o servidor é iniciado de novo.
+    // - STRICT obriga cada coluna a receber exatamente o tipo declarado.
+    //
+    // Tabela usuarios: uma linha por conta. "email ... UNIQUE" faz o banco recusar
+    // e-mails repetidos. senha_hash guarda só o resultado do Bcrypt, nunca a senha.
+    //
+    // Tabela transacoes: uma linha por simulação registrada.
+    // - usuario_id é a chave estrangeira (REFERENCES usuarios): toda operação pertence
+    //   a uma conta existente, e uma conta não pode ser apagada deixando operações órfãs.
+    // - Os CHECK são regras de validação dentro do próprio banco: tipo só COMPRA/VENDA,
+    //   ativo só USD/EUR/BTC, spread de 1%, valores positivos e líquido = bruto − taxa.
+    // - Os valores em reais ficam em centavos inteiros (bruto, taxa e líquido), o que evita
+    //   erros de arredondamento. montante, cotacao e quantidade_ativo ficam como texto
+    //   para guardar exatamente as casas decimais (o BTC usa oito).
+    // - O último CHECK amarra as moedas ao sentido: na COMPRA sai BRL e entra o ativo;
+    //   na VENDA sai o ativo e entra BRL.
+    // - status começa em ATIVA; o cancelamento muda para CANCELADA sem apagar a linha.
+    // - data_cotacao é o horário informado pela AwesomeAPI; criado_em, o horário do registro.
+    //
+    // O índice funciona como o índice de um livro: acelera a busca das operações de um
+    // usuário, já na ordem da mais nova para a mais antiga.
     db.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA busy_timeout = 5000;
@@ -44,6 +81,7 @@ function abrirBanco(filename = process.env.DB_PATH || path.join(__dirname, 'data
     `);
     return db;
   } catch (erro) {
+    // Se algo der errado, fecha o arquivo antes de avisar quem chamou a função.
     db.close();
     throw erro;
   }
