@@ -12,14 +12,15 @@ const emissor = 'cambio-track-pro';
 
 /**
  * Cria o token de uma conta que acabou de fazer login.
- * O token guarda apenas o número da conta (sub), o emissor e a validade de 1 hora.
+ * O token guarda apenas o número da conta (sub), a data de criação da conta (criado_em),
+ * o emissor (iss), a hora de emissão (iat) e o vencimento (exp), 1 hora depois.
  * Seu conteúdo pode ser lido por qualquer pessoa; por isso nunca colocamos a senha nele.
- * @param {{id: number}} usuario Conta autenticada.
+ * @param {{id: number, criado_em: string}} usuario Conta autenticada.
  * @param {string} segredo JWT_SECRET usada para assinar.
  * @returns {string} Token no formato cabeçalho.conteúdo.assinatura.
  */
 function emitirToken(usuario, segredo) {
-  return jwt.sign({}, segredo, {
+  return jwt.sign({ criado_em: usuario.criado_em }, segredo, {
     algorithm: 'HS256', issuer: emissor, subject: String(usuario.id), expiresIn: '1h'
   });
 }
@@ -38,20 +39,26 @@ function exigirUsuario(db, segredo) {
     // Extrai o token do cabeçalho "Authorization: Bearer <token>".
     const token = /^Bearer ([^\s]+)$/i.exec(req.get('Authorization') || '')?.[1];
     let id;
+    let criadoEm;
     try {
       // verify confere a assinatura, aceita somente HS256 e o nosso emissor, e
       // recusa tokens vencidos. Qualquer problema lança um erro e cai no catch.
       const claims = jwt.verify(token, segredo, { algorithms: ['HS256'], issuer: emissor });
       id = Number(claims.sub);
-      // Exigimos validade (exp) e um número de conta inteiro e positivo.
-      if (!claims.exp || !Number.isSafeInteger(id) || id < 1) throw new Error();
+      criadoEm = claims.criado_em;
+      // Exigimos validade (exp), um número de conta inteiro e positivo e a data de criação.
+      if (!claims.exp || !Number.isSafeInteger(id) || id < 1 || typeof criadoEm !== 'string') throw new Error();
     } catch {
       // 401 = não autenticado. O painel usa esse código para voltar à tela de login.
       return res.status(401).json({ erro: 'Sessão inválida ou expirada. Entre novamente.' });
     }
-    // A conta precisa continuar existindo, mesmo quando a assinatura é válida.
+    // A conta precisa continuar existindo e ser a mesma que recebeu o token. Se o banco for
+    // apagado e recriado, outra pessoa pode receber o mesmo número de conta; a data de
+    // criação diferente impede que o token antigo abra a carteira dela.
     req.usuario = buscar.get(id);
-    if (!req.usuario) return res.status(401).json({ erro: 'Sessão inválida ou expirada. Entre novamente.' });
+    if (!req.usuario || req.usuario.criado_em !== criadoEm) {
+      return res.status(401).json({ erro: 'Sessão inválida ou expirada. Entre novamente.' });
+    }
     // Tudo certo: segue para a rota, que agora sabe quem é o usuário (req.usuario).
     next();
   };

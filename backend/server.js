@@ -50,7 +50,8 @@ function createApp({ db, jwtSecret, buscarCotacoes = criarConsultaComCache(consu
     // Respostas da API nunca ficam guardadas em cache, pois contêm dados da carteira.
     res.set('Cache-Control', 'no-store');
     const origem = req.get('origin');
-    // Sem cabeçalho Origin (terminal, testes, mesma página): segue normalmente.
+    // Sem cabeçalho Origin (terminal, testes ou GET feito pela própria página): segue normalmente.
+    // POST, PATCH e DELETE da própria página trazem Origin e são liberados pela comparação de host abaixo.
     if (!origem) return next();
     let mesmoHost = false;
     try {
@@ -93,8 +94,9 @@ function createApp({ db, jwtSecret, buscarCotacoes = criarConsultaComCache(consu
     if (erro.type === 'charset.unsupported' || erro.type === 'encoding.unsupported') {
       return res.status(415).json({ erro: 'Codificação do corpo da requisição não suportada.' });
     }
-    // Erros previstos pelo código (dados inválidos, fonte externa fora do ar ou lenta)
-    // já trazem uma mensagem pronta para o usuário.
+    // Erros 400/502/503/504 sem "type" têm a mensagem repassada. Os criados pelo código
+    // (dados inválidos, fonte externa fora do ar ou lenta) já vêm em português; o próprio
+    // Express também gera 400 ao receber um :id malformado na URL (mensagem técnica, em inglês).
     if ([400, 502, 503, 504].includes(erro.status) && !erro.type) {
       return res.status(erro.status).json({ erro: erro.message });
     }

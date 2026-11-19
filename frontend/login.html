@@ -10,7 +10,8 @@
   <title>Acesso à carteira · CâmbioTrack Pro</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="css/style.css">
-  <!-- Scripts do tipo module só rodam depois que a página foi carregada. -->
+  <!-- Scripts do tipo module são adiados: só rodam depois que o navegador lê todo o HTML,
+       por isso já encontram os campos do formulário. -->
   <script src="js/login.js" type="module"></script>
 </head>
 <body class="auth-page">
@@ -22,8 +23,10 @@
       <h2 id="titulo-acesso">Acessar minha carteira</h2>
       <p class="subtitle" id="descricao-acesso">Entre para consultar suas simulações de câmbio.</p>
       <!-- Um único formulário serve para login e cadastro. Nome e confirmação
-           só aparecem (e só são obrigatórios) no modo cadastro. -->
-      <form id="formulario-acesso">
+           só aparecem (e só são obrigatórios) no modo cadastro.
+           method="post": se o script estiver desativado ou ainda carregando, o envio
+           nativo não coloca e-mail e senha no endereço da página. -->
+      <form id="formulario-acesso" method="post">
         <fieldset id="campos-acesso">
           <legend class="sr-only">Dados de acesso</legend>
           <div class="input-group" id="grupo-nome" hidden>

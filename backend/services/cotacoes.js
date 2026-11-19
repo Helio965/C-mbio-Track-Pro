@@ -11,8 +11,8 @@ const ENDPOINT = 'https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BR
 
 // Por quanto tempo a última consulta válida é reaproveitada (30 segundos).
 // Sem chave, a própria AwesomeAPI devolve a mesma resposta durante 1 minuto (cache dela)
-// e limita o número de consultas por endereço. Repetir a consulta a cada prévia
-// gastaria esse limite (resposta HTTP 429) sem trazer um preço mais novo.
+// e pode recusar consultas por limite de uso (HTTP 429). Repetir a consulta a cada
+// prévia gastaria a cota sem trazer um preço mais novo.
 const VALIDADE_MS = 30_000;
 
 /** Cria um erro de fonte externa: 502 (resposta ruim) ou 504 (tempo esgotado). */
@@ -84,9 +84,9 @@ async function buscarCotacoes(fetchImpl = fetch, timeoutMs = 12000, chave = proc
   if (typeof chave === 'string' && chave.trim()) headers['x-api-key'] = chave.trim();
   try {
     const resposta = await fetchImpl(ENDPOINT, { signal, headers });
-    // 429 = a fonte recusou por excesso de consultas vindas deste endereço.
+    // 429 = a fonte recusou a consulta por limite de uso (cota esgotada).
     if (resposta.status === 429) {
-      throw falhaDaFonte('A AwesomeAPI recusou a consulta por limite de uso (HTTP 429). Aguarde alguns minutos e tente novamente.');
+      throw falhaDaFonte('A AwesomeAPI recusou a consulta por limite de uso (HTTP 429). Tente mais tarde ou configure AWESOMEAPI_KEY no back-end.');
     }
     if (!resposta.ok) throw falhaDaFonte('AwesomeAPI indisponível (HTTP ' + resposta.status + ').');
     return normalizarCotacoes(await resposta.json());
@@ -108,14 +108,17 @@ async function buscarCotacoes(fetchImpl = fetch, timeoutMs = 12000, chave = proc
  * Cada operação continua gravando o horário informado pela fonte (data_cotacao).
  * @param {Function} consultar Função que busca as cotações (padrão: buscarCotacoes).
  * @param {number} validadeMs Tempo de reaproveitamento em milissegundos.
- * @param {Function} agora Relógio em milissegundos. performance.now() só avança, mesmo se o
- *                        horário do computador for ajustado (os testes usam um relógio falso).
+ * @param {Function} agora Relógio em milissegundos (os testes usam um relógio falso).
  * @returns {Function} Função sem parâmetros que devolve uma Promise de cotações.
  */
-function criarConsultaComCache(consultar = buscarCotacoes, validadeMs = VALIDADE_MS, agora = () => performance.now()) {
+function criarConsultaComCache(consultar = buscarCotacoes, validadeMs = VALIDADE_MS, agora = Date.now) {
   let ultima = null; // { inicio: horário da consulta em ms, promessa: resposta esperada }
   return function consultarComCache() {
-    if (ultima && agora() - ultima.inicio < validadeMs) return ultima.promessa;
+    // Idade da última consulta pelo relógio do computador. Ele também avança enquanto o
+    // computador está suspenso. Se o horário for ajustado para trás, a idade fica negativa
+    // e a fonte é consultada de novo: nunca se reaproveita uma cotação por mais de 30 s.
+    const idade = ultima ? agora() - ultima.inicio : Infinity;
+    if (idade >= 0 && idade < validadeMs) return ultima.promessa;
     const atual = { inicio: agora(), promessa: consultar() };
     ultima = atual;
     atual.promessa.catch(() => {

@@ -16,7 +16,7 @@ O painel evolui o CâmbioTrack do Projeto 01. Mantém os três pares com BRL, a 
 
 ## Requisitos
 
-- **Node.js 24 LTS ou 26 LTS** com o npm que o acompanha ([nodejs.org](https://nodejs.org/)). A linha 22 também funciona a partir da **22.21.0**; na linha 24, o mínimo é **24.5.0**. Versões anteriores não iniciam a API e mostram `node: bad option: --use-env-proxy`.
+- **Node.js 24 LTS ou 26 LTS** com o npm que o acompanha ([nodejs.org](https://nodejs.org/)). A linha 22 também funciona a partir da **22.13.0**, e a linha 24 desde a **24.0.0**. Versões anteriores à 22.13.0 não têm o SQLite integrado e a API não inicia (`No such built-in module: node:sqlite`).
 - Acesso à internet para as cotações. O cadastro, o login e o histórico funcionam mesmo sem a AwesomeAPI.
 - Não é preciso instalar banco de dados, compilador ou extensões: o SQLite vem com o Node.js e o Bcrypt traz binários prontos para Windows x64 e ARM64.
 
@@ -47,15 +47,16 @@ npm.cmd ci
 npm.cmd start
 ```
 
-Espere a mensagem **`Front-end disponível na porta 5173: abra http://localhost:5173`** e abra **http://localhost:5173** no navegador. A interface chama a API em `http://localhost:3000/api`.
+Espere a mensagem **`Front-end disponível na porta 5173: abra http://localhost:5173`** e abra **http://localhost:5173** no navegador. A interface chama a API em `http://localhost:3000/api`. Use sempre esse endereço: abrir o `index.html` direto do disco ou pelo Live Server não funciona, porque a página depende dos servidores das portas 5173 e 3000.
 
 **Detalhes dos comandos**
 
-- `npm.cmd` é o npm do Windows. No PowerShell, o comando `npm` pode ser bloqueado pela política de scripts (`running scripts is disabled on this system`). No Prompt de Comando (cmd) e no Linux ou macOS, use `npm` nas mesmas linhas.
+- `npm.cmd` é o npm do Windows. No PowerShell, o comando `npm` pode ser bloqueado pela política de scripts (`running scripts is disabled on this system`). No Prompt de Comando (cmd) e no terminal do Linux ou macOS, troque `npm.cmd` por `npm`. O bloco `if` é sintaxe do PowerShell: nesses terminais, na primeira vez, execute dentro de `backend` apenas a linha `node -e "..."`, que cria o `.env` sem sobrescrever um arquivo existente. As consultas com `Invoke-RestMethod`, mais abaixo, também exigem PowerShell.
 - `npm.cmd ci` instala exatamente as versões registradas no `package-lock.json`. `npm.cmd install` também funciona. O front-end não tem dependências, então o comando só confere o projeto.
 - `npm.cmd run dev` inicia o mesmo servidor e o reinicia sozinho quando um arquivo é salvo. Vale para os dois terminais.
 - Para encerrar um servidor, pressione **Ctrl+C**. Se aparecer `Deseja finalizar o arquivo em lotes (S/N)?`, responda `S`.
 - Também é possível usar um só endereço: com a API ligada, **http://localhost:3000** entrega a mesma interface pelo Express.
+- Em redes que exigem proxy configurado nas variáveis `HTTPS_PROXY`/`HTTP_PROXY`, inicie a API com `npm.cmd run start:proxy` (Node 22.21.0 ou 24.5.0 em diante) para que a consulta à AwesomeAPI passe pelo proxy.
 
 **Mensagens esperadas, que não são erros**
 
@@ -67,10 +68,11 @@ Espere a mensagem **`Front-end disponível na porta 5173: abra http://localhost:
 
 | Mensagem | Causa | Solução |
 | --- | --- | --- |
-| `node: bad option: --use-env-proxy` | Node.js anterior a 22.21.0 ou 24.5.0 | Instale o Node.js 24 LTS ou 26 LTS e abra um novo terminal. |
-| `Falha ao iniciar o servidor. Configure JWT_SECRET com pelo menos 32 bytes.` | O arquivo `backend/.env` não existe ou está vazio | Execute de novo o bloco `if` do Terminal 1 dentro da pasta `backend`. |
+| `No such built-in module: node:sqlite` | Node.js anterior a 22.13.0 | Instale o Node.js 24 LTS ou 26 LTS e abra um novo terminal. |
+| `node: bad option: --use-env-proxy` | `npm.cmd run start:proxy` com Node.js anterior a 22.21.0 ou 24.5.0 | Use `npm.cmd start` ou atualize o Node.js. |
+| `Falha ao iniciar o servidor. Configure JWT_SECRET com pelo menos 32 bytes.` | O arquivo `backend/.env` não existe ou não tem `JWT_SECRET` com pelo menos 32 bytes (por exemplo, `.env` vazio ou copiado do `.env.example`) | Se o arquivo não existe, execute o bloco `if` do Terminal 1 dentro da pasta `backend`. Se ele existe, o bloco não o altera: abra `backend/.env` e preencha `JWT_SECRET=` com o resultado de `node -p "require('node:crypto').randomBytes(32).toString('hex')"`. |
 | `Falha ao abrir a porta do servidor. EADDRINUSE` | Outro programa usa a porta 3000 | Encerre a outra API. A interface da porta 5173 espera a API na porta 3000. |
-| `A AwesomeAPI recusou a consulta por limite de uso (HTTP 429)` | A fonte limita consultas sem chave por endereço de internet | Aguarde alguns minutos ou use uma chave gratuita da AwesomeAPI em `AWESOMEAPI_KEY` (veja abaixo). |
+| `A AwesomeAPI recusou a consulta por limite de uso (HTTP 429)` | A fonte informou cota de uso esgotada (`QuotaExceeded`) para consultas sem chave | Tente mais tarde ou use uma chave gratuita da AwesomeAPI em `AWESOMEAPI_KEY` (veja abaixo). |
 | `Não foi possível conectar ao servidor` no painel | A API não está rodando | Inicie o Terminal 1 e recarregue a página. |
 
 **Variáveis do back-end (`backend/.env`)**
@@ -88,9 +90,9 @@ Espere a mensagem **`Front-end disponível na porta 5173: abra http://localhost:
 ## Usar a carteira
 
 1. Em **Criar conta**, informe nome, e-mail, senha e confirmação. Use uma senha de pelo menos oito caracteres e até 72 bytes. Depois entre com o e-mail e a senha da conta.
-2. Consulte os preços de USD, EUR e BTC e o horário informado pela fonte. O botão **Atualizar cotações** consulta a fonte novamente.
+2. Consulte os preços de USD, EUR e BTC e o horário informado pela fonte. O botão **Atualizar cotações** pede os preços de novo ao servidor, que reaproveita a última consulta válida à fonte por até 30 segundos.
 3. Selecione compra ou venda, escolha o ativo e informe o montante. Na compra, informe **reais disponíveis**. Na venda, informe **unidades do ativo**. Confira o preço, o bruto, a taxa e o resultado na prévia.
-4. Registre a simulação. O servidor obtém a cotação no momento do registro e devolve os valores definitivos.
+4. Registre a simulação. O servidor calcula com a cotação mais recente que obteve da fonte (reaproveitada por até 30 segundos) e devolve os valores definitivos. Se a cotação mudar entre a prévia e o registro, o resultado pode mudar.
 5. Consulte o histórico. **Cancelar** preserva o cartão e retira a operação dos totais ativos. **Excluir** remove o registro do banco. **Sair** encerra a sessão na aba. Ao entrar de novo, a API carrega a carteira da conta.
 6. Para verificar a persistência, registre uma operação, anote seu valor e horário e feche o navegador. Encerre a API com Ctrl+C e inicie-a de novo com `npm.cmd start`. Abra o front-end, entre na mesma conta e localize a operação.
 
@@ -139,7 +141,8 @@ USD e EUR admitem duas casas decimais e BTC admite oito. A entrada em BRL admite
 A API consulta `https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL` e confere código, `bid`, `ask` e `timestamp` de cada par. A interface exibe essas cotações pela rota `GET /api/cotacoes` do servidor próprio, e o mesmo preço é usado para calcular e gravar cada operação. Assim o navegador não consegue enviar um preço diferente.
 
 - A consulta tem limite de 12 segundos. Falha, demora ou resposta inválida da fonte bloqueia novas simulações, sem apagar nem impedir a leitura do histórico.
-- A última cotação válida é reaproveitada por até 30 segundos. Sem chave, a própria AwesomeAPI repete a mesma resposta por 1 minuto e limita o número de consultas por endereço (HTTP 429). Por isso, digitar valores na prévia não gasta a cota a cada tecla. Cada operação grava o horário informado pela fonte.
+- A última cotação válida é reaproveitada por até 30 segundos. Sem chave, a própria AwesomeAPI repete a mesma resposta por 1 minuto e pode recusar consultas por limite de uso (HTTP 429). Por isso, digitar valores na prévia não gasta a cota a cada tecla. Cada operação grava o horário informado pela fonte.
+- O painel continua consumindo a AwesomeAPI em tempo real: ao abrir, ao clicar em **Atualizar cotações** e a cada prévia ou registro, o servidor usa a cotação mais recente da fonte (obtida há no máximo 30 segundos) e mostra o horário informado por ela.
 - Segundo a documentação da AwesomeAPI, com `AWESOMEAPI_KEY` a fonte oferece cota própria (100 mil requisições mensais gratuitas) e dados sem o cache de 1 minuto.
 
 ## API REST
@@ -151,7 +154,7 @@ Todos os caminhos abaixo começam em `/api`. Envie JSON com `Content-Type: appli
 | `POST /auth/register` | Livre | `nome`, `email`, `senha` | 201, usuário público |
 | `POST /auth/login` | Livre | `email`, `senha` | 200, `token` e `usuario` |
 | `GET /auth/me` | Sim | Identificação da sessão | 200, `usuario` |
-| `GET /cotacoes` | Livre | Consulta os três pares na AwesomeAPI | 200, ativos com `bid`, `ask`, `data` e `variacao` |
+| `GET /cotacoes` | Livre | Cotações dos três pares obtidas da AwesomeAPI (reaproveitadas por até 30 s) | 200, ativos com `bid`, `ask`, `data` e `variacao` |
 | `POST /transacoes/previa` | Sim | `tipo`, `ativo`, `montante` | 200, simulação calculada sem gravar |
 | `POST /transacoes` | Sim | Mesmos campos da prévia | 201, registro com identificador |
 | `GET /transacoes` | Sim | Histórico da conta | 200, lista |
@@ -189,11 +192,11 @@ No PowerShell, abra a pasta `backend` e execute a suíte após a instalação da
 npm.cmd test
 ```
 
-São 25 testes automatizados com bancos SQLite temporários e respostas externas controladas, sem tocar no banco real em `backend/data`. Para verificar a fonte real, inicie a API e use a chamada `GET /api/cotacoes` acima. A rede precisa permitir HTTPS para `economia.awesomeapi.com.br`. Se a fonte falhar, a interface informa o problema, o servidor recusa novas operações e o histórico salvo continua acessível.
+São 26 testes automatizados com bancos SQLite temporários e respostas externas controladas, sem tocar no banco real em `backend/data`. Para verificar a fonte real, inicie a API e use a chamada `GET /api/cotacoes` acima. A rede precisa permitir HTTPS para `economia.awesomeapi.com.br`. Se a fonte falhar, a interface informa o problema, o servidor recusa novas operações e o histórico salvo continua acessível.
 
 Consulte os resultados da execução, os limites da validação e as evidências dos seis critérios em [Auditoria da entrega](docs/AUDITORIA.md). Para estudar o fluxo de uma requisição, a autorização e a matemática do spread, leia o [Guia de entendimento técnico](docs/ENTENDIMENTO_TECNICO.md).
 
-As sessões duram uma hora e o token fica em `sessionStorage`. Um script malicioso executado na origem poderia lê-lo. O logout limpa a cópia do navegador. Uma cópia que tenha sido obtida antes do logout pode valer até a expiração. O histórico depende de conservar o arquivo SQLite com permissão de leitura e escrita. O projeto simula conversões e não executa ordens de câmbio, liquidação bancária ou custódia de ativos.
+As sessões duram uma hora e o token fica em `sessionStorage`. O token também leva a data de criação da conta: se o banco for apagado e recriado, um token antigo não abre a conta nova que receber o mesmo número. Um script malicioso executado na origem poderia lê-lo. O logout limpa a cópia do navegador. Uma cópia que tenha sido obtida antes do logout pode valer até a expiração. O histórico depende de conservar o arquivo SQLite com permissão de leitura e escrita. O projeto simula conversões e não executa ordens de câmbio, liquidação bancária ou custódia de ativos.
 
 ## Referências
 

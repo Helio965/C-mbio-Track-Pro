@@ -1,7 +1,7 @@
 // ==========================================================================
 // SERVIDOR DO FRONT-END (porta 5173)
 // Entrega ao navegador os arquivos HTML, CSS e JavaScript da interface.
-// Não usa bibliotecas: apenas o módulo http que já vem com o Node.js.
+// Não usa bibliotecas externas: apenas os módulos http e fs/promises, que já vêm com o Node.js.
 // O cliente usa apenas arquivos estáticos. Uma lista explícita limita os arquivos
 // públicos, inclusive quando chegam caminhos inesperados na URL.
 // ==========================================================================

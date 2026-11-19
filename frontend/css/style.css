@@ -204,7 +204,9 @@ h3 {
 
 /* ==========================================================================
    4. FORMULÁRIO E BOTÕES
-   Os campos usam Flexbox em coluna. Validações nativas são definidas no HTML.
+   Os campos usam Flexbox em coluna. Validações nativas: required, type e maxlength ficam
+   no HTML; o JavaScript ajusta minLength e required conforme o modo da tela de acesso e
+   usa setCustomValidity para o valor e a confirmação da senha.
    ========================================================================== */
 fieldset {
   min-width: 0;
@@ -309,7 +311,8 @@ button:disabled {
 
 /* ==========================================================================
    5. RESULTADO E INDICADORES
-   Os valores são calculados no JavaScript; o CSS define apenas a apresentação.
+   Os valores vêm da API (o servidor calcula o resultado e o banco soma os indicadores);
+   o JavaScript só os exibe e o CSS define apenas a apresentação.
    ========================================================================== */
 .result-section {
   border-top: 4px solid #0066cc;

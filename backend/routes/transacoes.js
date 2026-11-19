@@ -58,7 +58,9 @@ function rotasTransacoes(db, buscarCotacoes) {
   // CRIAÇÃO (POST) ------------------------------------------------------------------
   /**
    * Valida o formulário e calcula a operação com a cotação obtida pelo servidor.
-   * A validação vem primeiro: um pedido inválido nem chega a consultar a AwesomeAPI.
+   * A validação do formulário vem primeiro: tipo, ativo ou montante malformados nem chegam
+   * a consultar a AwesomeAPI. Os limites que dependem do preço (bruto e quantidade do ativo)
+   * só são conferidos depois, em calcular().
    * A prévia e o registro usam exatamente esta mesma regra.
    * @param {object} body Corpo JSON com tipo, ativo e montante.
    * @returns {Promise<object>} Valores calculados, prontos para exibir ou gravar.
@@ -70,7 +72,9 @@ function rotasTransacoes(db, buscarCotacoes) {
   // Prévia: devolve o cálculo e não grava nada.
   router.post('/previa', async (req, res) => res.json(await simular(req.body)));
   // Registro: grava a linha ligada ao dono do token e responde 201 (criado).
-  // Se a cotação mudou desde a prévia, o registro usa o preço mais recente.
+  // O preço nunca vem do navegador: o servidor pede a cotação outra vez. Até 30 s depois da
+  // última consulta à fonte, recebe a mesma cotação guardada (em geral, a da prévia); depois
+  // disso, a fonte é consultada de novo e o resultado pode mudar.
   router.post('/', async (req, res) => {
     const operacao = await simular(req.body);
     res.status(201).json(inserir.get({ ...operacao, usuario_id: req.usuario.id }));

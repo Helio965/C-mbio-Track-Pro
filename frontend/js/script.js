@@ -65,12 +65,14 @@ function erroFormulario(texto = "") {
 /**
  * Desativar um botão ou campo que está com o foco faz o navegador "soltar" o foco no
  * corpo da página. Nesse caso, o foco volta para o elemento indicado, e quem navega
- * pelo teclado continua de onde parou.
+ * pelo teclado continua de onde parou. A página não rola (preventScroll), para não
+ * tirar do lugar quem rolou a tela durante a espera. Use rolar = true quando o foco
+ * vai para outro controle, como "Tentar novamente".
  */
-function devolverFoco(elemento) {
+function devolverFoco(elemento, rolar = false) {
   const foco = document.activeElement;
   if ((!foco || foco === document.body) && elemento && elemento !== document.body && elemento.isConnected) {
-    elemento.focus();
+    elemento.focus({ preventScroll: !rolar });
   }
 }
 
@@ -206,13 +208,13 @@ function atualizarPrevia() {
   temporizador = setTimeout(async () => {
     try {
       const op = await api("transacoes/previa", { metodo: "POST", corpo: dados });
-      if (versao === versaoPrevia) renderizarResultado(op, "A cotação será consultada novamente ao registrar.");
+      if (versao === versaoPrevia) renderizarResultado(op, "O valor final é calculado pelo servidor ao registrar.");
     } catch (erro) {
       if (versao !== versaoPrevia) return;
       // 502/504: a fonte de preços falhou. O formulário é bloqueado e o foco vai para "Tentar novamente".
       if ([502, 504].includes(erro.status)) {
         invalidarCotacoes(erro);
-        devolverFoco(id("atualizar-cotacoes"));
+        devolverFoco(id("atualizar-cotacoes"), true);
       } else renderizarResultado(null, "Estimativa indisponível.");
       erroFormulario(erro.message);
     }
@@ -356,7 +358,8 @@ async function alterarOperacao(numero, acao) {
 // 7. EVENTOS
 // ==========================================================================
 
-// Registrar simulação (POST /api/transacoes): o servidor consulta a cotação e grava no SQLite.
+// Registrar simulação (POST /api/transacoes): o servidor obtém a cotação (a última consulta
+// válida à AwesomeAPI é reaproveitada por até 30 s), calcula e grava no SQLite.
 id("formulario-conversao").addEventListener("submit", async evento => {
   // Impede o recarregamento da página; o envio é feito pelo fetch.
   evento.preventDefault();
@@ -382,7 +385,7 @@ id("formulario-conversao").addEventListener("submit", async evento => {
     id("atualizar-cotacoes").disabled = false;
     id("registrar-operacao").textContent = "Registrar simulação";
     // Se a fonte de preços falhou, o formulário segue bloqueado e o foco vai para "Tentar novamente".
-    devolverFoco(cotacoes ? focoAnterior : id("atualizar-cotacoes"));
+    devolverFoco(cotacoes ? focoAnterior : id("atualizar-cotacoes"), !cotacoes);
   }
 });
 

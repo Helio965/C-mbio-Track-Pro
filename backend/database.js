@@ -12,7 +12,8 @@ const path = require('node:path');
 /**
  * Abre (ou cria) o banco e garante que as tabelas existam.
  * @param {string} filename Caminho do arquivo. Usa DB_PATH do .env ou backend/data/cambio.sqlite.
- *                          ':memory:' cria um banco temporário na memória, usado só em testes.
+ *                          ':memory:' cria um banco temporário na memória (a API não usa essa
+ *                          opção, e os testes usam arquivos temporários).
  * @returns {DatabaseSync} Conexão pronta para consultas.
  */
 function abrirBanco(filename = process.env.DB_PATH || path.join(__dirname, 'data', 'cambio.sqlite')) {
@@ -34,7 +35,8 @@ function abrirBanco(filename = process.env.DB_PATH || path.join(__dirname, 'data
     // - usuario_id é a chave estrangeira (REFERENCES usuarios): toda operação pertence
     //   a uma conta existente, e uma conta não pode ser apagada deixando operações órfãs.
     // - Os CHECK são regras de validação dentro do próprio banco: tipo só COMPRA/VENDA,
-    //   ativo só USD/EUR/BTC, spread de 1%, valores positivos e líquido = bruto − taxa.
+    //   ativo só USD/EUR/BTC, spread de 1%, bruto e líquido maiores que zero, taxa nunca
+    //   negativa (fica zero quando o bruto é de até R$ 0,49) e líquido = bruto − taxa.
     // - Os valores em reais ficam em centavos inteiros (bruto, taxa e líquido), o que evita
     //   erros de arredondamento. montante, cotacao e quantidade_ativo ficam como texto
     //   para guardar exatamente as casas decimais (o BTC usa oito).

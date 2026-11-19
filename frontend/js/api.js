@@ -64,7 +64,9 @@ export async function api(rota, { metodo = "GET", corpo, privada = true } = {}) 
       signal: AbortSignal.timeout(20000), cache: "no-store"
     });
   } catch (erro) {
-    // O fetch só cai aqui quando nem houve resposta (servidor desligado, rede fora, demora).
+    // O fetch cai aqui quando não há resposta que a página possa ler: servidor desligado,
+    // rede fora, demora ou bloqueio do próprio navegador (origem recusada pelo CORS ou
+    // endereço fora da Content-Security-Policy).
     if (erro.name === "TimeoutError") throw new Error("O servidor demorou para responder. Consulte a carteira antes de repetir uma operação.");
     throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão.");
   }
